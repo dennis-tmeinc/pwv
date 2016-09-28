@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory>
+
+    <ListPreference
+        android:key="tag_incident_classification"
+        android:title="@string/tag_incident_classification_title"
+        android:entries="@array/tag_incident_classification_entries"
+        android:entryValues="@array/tag_incident_classification_entries"
+        />
+
+    <EditTextPreference
+        android:key="tag_case_number"
+        android:title="@string/tag_case_number_title"
+        android:selectAllOnFocus="true"
+        android:singleLine="true"
+        />
+
+    <ListPreference
+        android:key="tag_priority"
+        android:title="@string/tag_priority_title"
+        android:entries="@array/tag_priority_entries"
+        android:entryValues="@array/tag_priority_entries"
+        />
+
+    <EditTextPreference
+        android:key="tag_notes"
+        android:title="@string/tag_notes_title"
+        android:singleLine="false"
+        />
+    </PreferenceCategory>
+</PreferenceScreen>

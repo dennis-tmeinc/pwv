@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <color name="loading_background">#dc323b1a</color>
+    <color name="loading_color">#ff76da89</color>
+
+    <color name="button_selected">#ff63bfb7</color>
+    <color name="button_main">#ffd5d589</color>
+
+    <color name="black_overlay">#66000000</color>
+
+    <color name="timebar_ncolor">#e601ff80</color>
+    <color name="timebar_lcolor">#e6ff0020</color>
+
+    <color name="diskmsg_green">#c844f418</color>
+    <color name="diskmsg_amber">#e7ffbf00</color>
+    <color name="diskmsg_red">#e6ff0020</color>
+    <color name="diskmsg_white">#edfffafa</color>
+
+</resources>

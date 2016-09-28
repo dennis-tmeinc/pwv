@@ -1,0 +1,21 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools" tools:context="com.tme_inc.pwv.Liveview">
+
+    <item android:id="@+id/action_playback"
+        android:title="@string/action_playback"
+        android:orderInCategory="100"
+        />
+
+    <item android:id="@+id/device_setup"
+        android:title="@string/action_device_setup"
+        android:orderInCategory="100"
+        />
+
+    <item android:id="@+id/video_archive"
+        android:title="@string/action_video_archive"
+        android:orderInCategory="100"
+        android:visible="false"
+        android:enabled="false" />
+
+</menu>

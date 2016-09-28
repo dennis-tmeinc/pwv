@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">pwv</string>
+    <string name="app_label">PW Controler</string>
+    <string name="hello_world">Hello world!</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_checkupdate">Check For Updates</string>
+    <string name="title_activity_touch">Touch</string>
+    <string name="title_activity_liveview">Live View</string>
+    <string name="text_button1">Button 1</string>
+    <string name="text_button2">Button 2</string>
+    <string name="title_activity_playback">Playback</string>
+    <string name="action_liveview">Live view</string>
+    <string name="action_playback">Play back</string>
+    <string name="action_remote">Remote Login</string>
+    <string name="action_touch">Touch Screen Test</string>
+    <string name="action_device_setup">Device Setup</string>
+    <string name="action_video_archive">Archive Video</string>
+    <string name="action_close">Close</string>
+
+    <string name="title_activity_live_test">LiveTest</string>
+    <string name="title_activity_play_file">PlayFile</string>
+    <string name="title_activity_launcher">Launcher</string>
+    <string name="title_activity_tag_event">Tag Event</string>
+    <string name="title_activity_settings">Settings</string>
+    <string name="title_activity_pwwebview">WEB</string>
+
+    <string name="tag_incident_classification_title">Incident Classification</string>
+    <string-array name="tag_incident_classification_entries">
+        <item>DUI</item>
+        <item>Motor Assist</item>
+        <item>Drug Seizure</item>
+        <item>Suspicious Vehicle</item>
+        <item>Domestic Calls</item>
+        <item>Assault</item>
+        <item>Evading</item>
+        <item>Traffic Warning</item>
+        <item>Traffic Citation</item>
+        <item>Traffic Accident</item>
+        <item>Felony</item>
+        <item>Misdemeanor</item>
+    </string-array>
+
+    <string name="tag_case_number_title">Case Number</string>
+
+    <string name="tag_priority_title">Priority</string>
+    <string-array name="tag_priority_entries">
+        <item>Routine</item>
+        <item>Critical</item>
+    </string-array>
+
+    <string name="tag_notes_title">Notes</string>
+
+    <string-array name="tag_incident_list">
+        <item>DUI</item>
+        <item>Motor assist</item>
+        <item>Drub Seizure</item>
+        <item>Suspicious Vehicle</item>
+        <item>Domestic call</item>
+        <item>Assault</item>
+        <item>Evading</item>
+        <item>Traffic Warning</item>
+        <item>Traffic Citation</item>
+        <item>Traffic Accident</item>
+        <item>Felony</item>
+        <item>Misdemeanor</item>
+    </string-array>
+
+    <string-array name="tag_priority_list">
+        <item>Routine</item>
+        <item>Critical</item>
+    </string-array>
+    <string name="title_activity_main">PW Viewer</string>
+    <string name="title_activity_remote_login">Remote Login</string>
+
+    <string name="title_activity_covert_screen">CovertScreenActivity</string>
+    <string name="covert_screen">Covert Screen</string>
+    <string name="title_activity_archive">ArchiveActivity</string>
+
+</resources>

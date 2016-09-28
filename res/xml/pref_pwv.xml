@@ -1,0 +1,37 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <EditTextPreference
+        android:key="officerId"
+        android:title="Officer ID"
+        android:defaultValue="00001"
+        android:singleLine="true"
+        android:maxLines="1" />
+
+    <EditTextPreference
+        android:key="dvrIp"
+        android:title="DVR IP Address"
+        android:defaultValue="192.168.1.100"
+        android:singleLine="true"
+        android:maxLines="1" />
+
+    <CheckBoxPreference
+        android:key="AutoStart"
+        android:title="Auto Start"
+        android:summary="Start PWViewer when power on"
+        android:defaultValue="true" />
+
+
+    <CheckBoxPreference
+        android:key="autoCheckUpdate"
+        android:title="Check Update"
+        android:summary="Automatically check software updates over Internet"
+        android:defaultValue="true" />
+
+    <EditTextPreference
+        android:key="autoCheckInterval"
+        android:title="Check Interval (hrs)"
+        android:defaultValue="24"
+        android:singleLine="true"
+        android:maxLines="1" />
+
+</PreferenceScreen>

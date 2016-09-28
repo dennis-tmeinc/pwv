@@ -1,0 +1,124 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools" android:layout_width="wrap_content"
+    android:layout_height="wrap_content" >
+
+    <ScrollView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:id="@+id/tagEventScrollView" >
+
+        <TableLayout
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent">
+
+            <TableRow
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="VRI:"
+                    android:id="@+id/textView3"
+                    android:gravity="right" />
+
+                <EditText
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/tag_vri"
+                    android:focusable="false" />
+            </TableRow>
+
+            <TableRow
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Incident Classification:"
+                    android:id="@+id/textView5"
+                    android:gravity="right" />
+
+                <Spinner
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/tag_incident" />
+            </TableRow>
+
+            <TableRow
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Case Number:"
+                    android:id="@+id/textView4"
+                    android:gravity="right" />
+
+                <EditText
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/tag_casenumber" />
+            </TableRow>
+
+            <TableRow
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Priority:"
+                    android:id="@+id/textView6"
+                    android:gravity="right" />
+
+                <Spinner
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:id="@+id/tag_priority" />
+            </TableRow>
+
+            <TableRow
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Officer ID:"
+                    android:id="@+id/textView7"
+                    android:gravity="right" />
+
+                <EditText
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:focusable="false"
+                    android:id="@+id/tag_officerid"
+                    />
+            </TableRow>
+
+            <TableRow
+                android:layout_width="fill_parent"
+                android:layout_height="fill_parent">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Notes:"
+                    android:id="@+id/textView8"
+                    android:gravity="right" />
+
+                <EditText
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:inputType="textMultiLine"
+                    android:ems="10"
+                    android:id="@+id/tag_notes" />
+            </TableRow>
+        </TableLayout>
+    </ScrollView>
+
+</RelativeLayout>

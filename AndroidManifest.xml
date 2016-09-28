@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.tme_inc.pwv">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <application
+        android:name=".pwvApp"
+        android:allowBackup="true"
+        android:icon="@drawable/icon"
+        android:label="@string/app_label"
+        android:theme="@style/AppTheme">
+        <activity
+            android:name=".MainActivity"
+            android:launchMode="singleTask"
+            android:label="@string/app_label">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".Launcher"
+            android:label="@string/app_label" />
+        <activity
+            android:name=".Liveview"
+            android:label="@string/app_label" />
+        <activity
+            android:name=".Playback"
+            android:label="@string/app_label" />
+        <activity
+            android:name=".TagEvent"
+            android:label="@string/title_activity_tag_event" />
+
+        <receiver
+            android:name=".PwBootReceiver"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.USER_PRESENT" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name=".TagEventActivity"
+            android:label="@string/title_activity_tag_event" />
+        <activity
+            android:name=".SettingsActivity"
+            android:label="@string/title_activity_settings" />
+        <activity
+            android:name=".LoginActivity"
+            android:label="@string/title_activity_login"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+
+        <service android:name=".PwvService" />
+
+        <activity
+            android:name=".CovertScreenActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:label="@string/title_activity_covert_screen"
+            android:theme="@style/FullscreenTheme" />
+        <activity
+            android:name=".PwWebView"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:label="@string/title_activity_pwwebview" />
+        <activity
+            android:name=".ArchiveActivity"
+            android:label="@string/title_activity_archive">
+        </activity>
+    </application>
+
+</manifest>

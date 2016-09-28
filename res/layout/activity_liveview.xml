@@ -1,0 +1,221 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.tme_inc.pwv.Liveview"
+    android:background="@android:color/background_dark">
+
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/layoutscreen"
+        android:layout_marginLeft="0dp"
+        android:layout_marginRight="0dp"
+        android:layout_above="@+id/pwcontrol"
+        android:layout_alignParentStart="false"
+        android:layout_alignParentEnd="false"
+        android:layout_marginTop="0dp"
+        android:layout_marginBottom="0dp">
+
+        <TextureView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:id="@+id/liveScreen"
+            android:layout_marginLeft="0dp"
+            android:layout_marginRight="0dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="Loading..."
+            android:id="@+id/loadingText"
+            android:textSize="30dp"
+            android:paddingLeft="20dp"
+            android:paddingTop="10dp"
+            android:background="@color/loading_background"
+            android:autoText="false"
+            android:layout_alignTop="@+id/layoutscreen"
+            android:layout_alignBottom="@+id/layoutscreen"
+            android:textColor="@color/loading_color" />
+
+        <ProgressBar
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/loadingBar"
+            android:layout_centerVertical="true"
+            android:layout_centerHorizontal="true"
+            android:layout_gravity="center"
+            android:layout_alignParentStart="false"
+            android:layout_alignTop="@+id/layoutscreen"
+            android:layout_alignBottom="@+id/layoutscreen" />
+
+    </FrameLayout>
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/pwcontrol"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentStart="false"
+        android:layout_alignParentEnd="false"
+        android:layout_centerHorizontal="true">
+
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent">
+
+            <ImageButton
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:id="@+id/button_covert"
+                android:src="@drawable/pw_bcovert"
+                android:background="#00000000"
+                android:layout_margin="8dp"
+                android:scaleType="fitXY" />
+
+            <ImageButton
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:scaleType="fitXY"
+                android:id="@+id/button_tag"
+                android:src="@drawable/pw_btag"
+                android:background="#00000000"
+                android:layout_margin="8dp" />
+
+            <ImageButton
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:scaleType="fitXY"
+                android:id="@+id/button_officer"
+                android:background="#00000000"
+                android:layout_margin="8dp"
+                android:src="@drawable/pw_bofficer" />
+
+            <ImageButton
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:scaleType="fitXY"
+                android:id="@+id/button_cam1"
+                android:background="#00000000"
+                android:layout_margin="8dp"
+                android:src="@drawable/pw_cam1" />
+
+            <ImageButton
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:scaleType="fitXY"
+                android:id="@+id/button_cam2"
+                android:background="#00000000"
+                android:layout_margin="8dp"
+                android:src="@drawable/pw_cam2" />
+
+            <ImageButton
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:scaleType="fitXY"
+                android:id="@+id/button_tm"
+                android:background="#00000000"
+                android:layout_margin="8dp"
+                android:src="@drawable/button_tm" />
+
+            <ImageButton
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:id="@+id/button_lp"
+                android:background="#00000000"
+                android:layout_margin="8dp"
+                android:src="@drawable/button_lp"
+                android:scaleType="fitXY" />
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <ImageButton
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/btPlayMode"
+        android:src="@drawable/iconlive"
+        android:layout_margin="8dp"
+        android:background="#00000000"
+        android:layout_alignParentEnd="true" />
+
+    <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|right"
+            android:layout_alignParentStart="false"
+            android:layout_centerVertical="true"
+            android:layout_alignParentRight="true"
+            android:elevation="2dp">
+
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/rec1"
+                android:layout_margin="4dp"/>
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/rec2"
+                android:layout_margin="4dp" />
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/rec3"
+                android:layout_margin="4dp" />
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/rec4"
+                android:layout_margin="4dp" />
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/rec5"
+                android:layout_margin="4dp" />
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/rec6"
+                android:layout_margin="4dp" />
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/rec7"
+                android:layout_margin="4dp" />
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:id="@+id/rec8"
+                android:layout_margin="4dp" />
+
+        </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="DISK1: NA"
+        android:id="@+id/disk1msg"
+        android:textSize="32dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_gravity="top" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="DISK2: NA"
+        android:id="@+id/disk2msg"
+        android:textSize="32dp"
+        android:layout_marginTop="48dp"
+        android:layout_marginLeft="8dp"
+        android:layout_marginRight="8dp"
+        android:layout_gravity="top" />
+
+</RelativeLayout>
