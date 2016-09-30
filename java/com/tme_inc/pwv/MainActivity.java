@@ -318,6 +318,10 @@ public class MainActivity extends Activity {
         else if( id == R.id.action_checkupdate ) {
             checkForUpdates( true ) ;
         }
+        else if( id == R.id.action_about ) {
+            AboutDialogFragment aboutDialog = new AboutDialogFragment();
+            aboutDialog.show(getFragmentManager(), "tagAbout");
+        }
         return super.onOptionsItemSelected(item);
     }
 

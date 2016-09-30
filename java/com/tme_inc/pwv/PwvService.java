@@ -500,7 +500,7 @@ public class PwvService extends Service {
         // tunnelling data
         protected void do_tunneling() {
             if (sock.isConnected() && target != null ) {
-                byte[] buffer = new byte[sock.avail()+4096];
+                byte[] buffer = new byte[8192];
                 int r = sock.recv1(buffer, 0, buffer.length);
                 if (r > 0) {
                     if( target != null ) {

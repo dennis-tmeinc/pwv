@@ -56,7 +56,7 @@ public class PwvSocket {
         return mSocket!=null && mSocket.isConnected();
     }
 
-    public int avail() {
+    public int available() {
         try {
             if( mSocket!=null ) {
                 return mSocket.getInputStream().available();
