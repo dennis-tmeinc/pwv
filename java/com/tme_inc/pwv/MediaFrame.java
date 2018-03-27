@@ -1,10 +1,12 @@
+/**
+ * MeidaFrame
+ * Created by dennis on 12/22/14.
+ */
+
 package com.tme_inc.pwv;
 
 import java.nio.ByteBuffer;
 
-/**
- * Created by dennis on 12/22/14.
- */
 public class MediaFrame {
 
     private byte [] m_frame;
@@ -33,6 +35,7 @@ public class MediaFrame {
     public byte get(int idx) {
         return m_frame[m_pos+idx] ;
     }
+    public int  geti(int idx) { return ((int)get(idx)) & 0xff ; }
     public byte [] array() {
         return m_frame ;
     }

@@ -14,22 +14,29 @@ import java.net.SocketException;
 
 /**
  * Created by dennis on 09/06/15.
+ * Socket wrapper for PW connections
  */
-public class PwvSocket {
+public class PwvSocket implements Closeable {
     private Socket mSocket ;
+    private InputStream is ;
+    private OutputStream os ;
 
     public PwvSocket() {
+        is = null ;
+        os = null ;
         mSocket = null ;
     }
 
     public PwvSocket(Socket s) {
+        is = null ;
+        os = null ;
         mSocket = s ;
     }
 
     // tcp connect
     public boolean connect(String host, int port) {
-        close();
         try {
+            close();
             mSocket = new Socket();
             mSocket.connect(new InetSocketAddress(host, port), 15000);
             mSocket.setSoTimeout(15000);
@@ -39,27 +46,31 @@ public class PwvSocket {
         return isConnected();
     }
 
-    public void close() {
+    @Override
+    public void close()  {
+        is = null ;
+        os = null ;
         if( mSocket!=null ) {
             try {
-                if( !mSocket.isClosed() ) {
-                    mSocket.close();
-                }
+                mSocket.close();
             } catch (IOException e) {
                 e.printStackTrace();
+            } finally {
+                mSocket = null ;
             }
-            mSocket = null ;
         }
     }
 
     public boolean isConnected(){
-        return mSocket!=null && mSocket.isConnected();
+        return mSocket!=null && mSocket.isConnected()  ;
     }
 
     public int available() {
         try {
             if( mSocket!=null ) {
-                return mSocket.getInputStream().available();
+                if( is == null )
+                    is = mSocket.getInputStream() ;
+                return is.available();
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -67,12 +78,14 @@ public class PwvSocket {
         return 0;
     }
 
-    // one call read, wait if no data available
+    // one shot read, wait if no data available
     public int recv1( byte [] rbuf, int offset, int rsize) {
         int r = 0 ;
         if (mSocket != null) {
             try {
-                r = mSocket.getInputStream().read(rbuf, offset, rsize);
+                if( is == null )
+                    is = mSocket.getInputStream() ;
+                r = is.read(rbuf, offset, rsize);
             } catch (IOException e) {
                 r = 0 ;
             }
@@ -83,6 +96,7 @@ public class PwvSocket {
         return r;
     }
 
+    // (block) read until buffer is filled, or socket closed
     public int recv( byte [] rbuf, int offset, int rsize) {
         int tr = 0;         // total read bytes
         int r ;
@@ -98,7 +112,7 @@ public class PwvSocket {
 
     public byte[] recv( int size ) {
         byte [] b = new byte[size] ;
-        if( recv( b ) == size ) {
+        if( recv( b, 0, size ) == size ) {
             return b ;
         }
         return null;
@@ -106,11 +120,11 @@ public class PwvSocket {
 
     // receive one line of input
     public String recvLine() {
-        byte[] buffer = new byte[4096];
+        byte[] buffer = new byte[8192];
         int tr = 0;         // total read bytes
         while(tr < buffer.length  && recv1( buffer, tr, 1)>0 ) {
-            if( buffer[tr] == '\n' ) {
-                // received a new line
+            if( buffer[tr] == '\n' || buffer[tr] == 0 ) {
+                // received a line
                 break;
             }
             tr++ ;
@@ -121,7 +135,9 @@ public class PwvSocket {
     public int send( byte [] buffer, int offset, int count ) {
         if (mSocket != null) {
             try {
-                mSocket.getOutputStream().write(buffer, offset, count);
+                if( os==null )
+                    os = mSocket.getOutputStream() ;
+                os.write(buffer, offset, count);
                 return count;
             }
             catch(IOException e){

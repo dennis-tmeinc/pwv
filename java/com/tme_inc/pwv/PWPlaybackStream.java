@@ -20,14 +20,14 @@ public class PWPlaybackStream extends PWStream {
 
     public String hashId ;
 
-    private DvrClient mClient ;
     private int mPlaybackHandle;    // DVR handle for playback
+    private DvrClient mClient ;
 
     private int[] mDayList = {};
 
     private boolean m_eos = false ;
 
-    private PlaybackThread mThread;
+    private HandlerThread mThread;
     private Handler mPWHandler;
     private Handler mUIHandler;
 
@@ -38,13 +38,34 @@ public class PWPlaybackStream extends PWStream {
         mClient = new DvrClient();
 
         // start Handler thread
-        mThread = new PlaybackThread();
+        mThread = new HandlerThread("PWPLAYER") {
+            @Override
+            protected void onLooperPrepared() {
+                super.onLooperPrepared();
+
+                mPWHandler = new Handler(){
+                    @Override
+                    public void handleMessage(Message msg) {
+                        super.handleMessage(msg);
+                        handlePWMessage(msg);
+                    }
+                };
+                mPWHandler.sendEmptyMessage(PWMessage.MSG_PW_CONNECT);
+            }
+
+        };
         mThread.start();
     }
 
+    // start get video frames
     @Override
     public void start() {
-        if(isRunning()) {
+        super.start();
+
+        // wait until thread is actually started
+        mThread.getLooper();
+
+        if( mPWHandler != null ) {
             mPWHandler.sendEmptyMessage(PWMessage.MSG_PW_GETFRAME);
         }
     }
@@ -52,6 +73,7 @@ public class PWPlaybackStream extends PWStream {
     @Override
     public void release() {
         super.release();
+
         if (isRunning()) {
             mPWHandler.sendEmptyMessage(PWMessage.MSG_PW_QUIT);     // send quit message
         }
@@ -99,37 +121,14 @@ public class PWPlaybackStream extends PWStream {
         }
     }
 
-    class PlaybackThread extends HandlerThread {
-        public PlaybackThread(){
-            super("PWPlayer");
-        }
-
-        @Override
-        protected void onLooperPrepared() {
-            super.onLooperPrepared();
-
-            mPWHandler = new Handler(){
-                @Override
-                public void handleMessage(Message msg) {
-                    super.handleMessage(msg);
-                    handlePWMessage(msg);
-                }
-            };
-            mPWHandler.sendEmptyMessage(PWMessage.MSG_PW_CONNECT);
-        }
-    }
-
     // handle msg on PW Thread
     void handlePWMessage(Message msg) {
         switch (msg.what) {
             case PWMessage.MSG_PW_QUIT :  // quit thread
                 if( connect() && mPlaybackHandle!=0  ) {
                     // to close stream handle before close connection
-                    DvrClient.Ans ans = new DvrClient.Ans();
-
                     //  send REQSTREAMCLOSE (203)
-                    mClient.sendReq(203, mPlaybackHandle, 0);
-                    mClient.recvAns(ans) ;
+                    mClient.request(203, mPlaybackHandle);
                 }
 
                 if( mPWHandler!=null ) {
@@ -152,9 +151,6 @@ public class PWPlaybackStream extends PWStream {
                         digester = null ;
                     }
 
-                    byte[] buffer = null ;
-                    DvrClient.Ans ans = new DvrClient.Ans();
-
                     // get Channel setup
                     // struct  DvrChannel_attr {
                     //  int         Enable ;
@@ -164,18 +160,15 @@ public class PWPlaybackStream extends PWStream {
                     // }
                     //
                     //  send REQGETCHANNELSETUP
-                    mClient.sendReq(14,mChannel,0);
-                    if( mClient.recvAns(ans) && ans.size>0 && ans.code == 11 ) {
-                        buffer = mClient.recv(ans.size);
-                        if( buffer!=null ) {
-                            ByteBuffer bb = ByteBuffer.wrap(buffer);
-                            bb.order(ByteOrder.LITTLE_ENDIAN);
-                            if( bb.getInt(0)!=0 ) {
-                                mRes = bb.getInt(68);
-                            }
-                            if( digester != null )
-                                digester.update(buffer);
+                    DvrClient.Ans ans = mClient.request(14,mChannel);
+                    if(  ans.databuf!=null && ans.code == 11 ) {
+                        ByteBuffer bb = ByteBuffer.wrap(ans.databuf);
+                        bb.order(ByteOrder.LITTLE_ENDIAN);
+                        if( bb.getInt(0)!=0 ) {
+                            mRes = bb.getInt(68);
                         }
+                        if( digester != null )
+                            digester.update(ans.databuf);
                     }
 
                     // get Channel Info
@@ -185,16 +178,15 @@ public class PWPlaybackStream extends PWStream {
                     //    char CameraName[64] ;
                     //} ;
                     //  send REQCHANNELINFO
-                    mClient.sendReq(4,0,0);
-                    if( mClient.recvAns(ans) && ans.size>0 && ans.code == 7 ) {
-                        buffer = mClient.recv(ans.size);
+                    ans = mClient.request(4);
+                    if( ans.size>0 && ans.code == 7 ) {
                         totalChannels = ans.data;
                         if( totalChannels>0 ) {
                             if( digester != null )
-                                digester.update(buffer);
+                                digester.update(ans.databuf);
                             mChannelNames = new String [totalChannels];
                             for(int i=0; i<totalChannels; i++) {
-                                mChannelNames[i] = new String(buffer, 72 * i + 8, 64).split("\0")[0];
+                                mChannelNames[i] = new String(ans.databuf, 72 * i + 8, 64).split("\0")[0];
                             }
                         }
                     }
@@ -203,17 +195,14 @@ public class PWPlaybackStream extends PWStream {
                         // get daylist
 
                         //  REQSTREAMDAYLIST   (214)
-                        mClient.sendReq(214,mPlaybackHandle,0);
-                        if( mClient.recvAns(ans) && ans.code == 207 ) {    //ANSSTREAMDAYLIST : 207
-                            if (ans.size > 0) {
-                                buffer = mClient.recv(ans.size);
-                                ByteBuffer b = ByteBuffer.wrap(buffer);
-                                b.order(ByteOrder.LITTLE_ENDIAN);
-                                int s = ans.size/4 ;
-                                mDayList = new int[s] ;
-                                for( int i=0; i<s; i++) {
-                                    mDayList[i] = b.getInt(i*4);
-                                }
+                        ans = mClient.request(214,mPlaybackHandle);
+                        if( ans.code == 207 && ans.databuf != null ) {    //ANSSTREAMDAYLIST : 207
+                            ByteBuffer b = ByteBuffer.wrap(ans.databuf);
+                            b.order(ByteOrder.LITTLE_ENDIAN);
+                            int s = ans.size/4 ;
+                            mDayList = new int[s] ;
+                            for( int i=0; i<s; i++) {
+                                mDayList[i] = b.getInt(i*4);
                             }
                         }
 
@@ -239,12 +228,10 @@ public class PWPlaybackStream extends PWStream {
                     if( mVideoFrameQueue.size()<100 ) {
 
                         // REQ2STREAMGETDATAEX (233)
-                        mClient.sendReq(233, mPlaybackHandle, 0);
-                        DvrClient.Ans ans = new DvrClient.Ans();
-                        if (mClient.recvAns(ans) && ans.code == 218 && ans.size>32 ) {    //ANS2STREAMDATAEX : 218
-                            byte[] buffer = mClient.recv(ans.size);
-                            if (buffer != null ) {
-                                ByteBuffer bb = ByteBuffer.wrap(buffer);
+                        DvrClient.Ans ans = mClient.request(233, mPlaybackHandle);
+                        if (ans.code == 218 && ans.size>32 ) {    //ANS2STREAMDATAEX : 218
+                            if (ans.databuf != null ) {
+                                ByteBuffer bb = ByteBuffer.wrap(ans.databuf);
                                 bb.order(ByteOrder.LITTLE_ENDIAN);
 
                                 // response contain header of structure dvrtime
@@ -286,8 +273,6 @@ public class PWPlaybackStream extends PWStream {
                     // clear all queued frames
                     clearQueue();
 
-                    DvrClient.Ans ans = new DvrClient.Ans();
-
                     int date = msg.arg1 ;
                     int time = msg.arg2 ;
 
@@ -314,15 +299,12 @@ public class PWPlaybackStream extends PWStream {
                     dvrtime.putInt(24, 0 ) ;
                     dvrtime.putInt(28, 0 ) ;
 
-                    mClient.sendReq(204, mPlaybackHandle, 32);
-                    mClient.send(dvrtime.array(), 0, 32) ;
+                    DvrClient.Ans ans = mClient.request(204, mPlaybackHandle, dvrtime.array());
 
                     m_eos = false ;
-                    if (mClient.recvAns(ans) && ans.code == 2) {    // ANSOK : 2
-                        if (ans.size >=40 ) {
-                            // treat file header as a frame
-                            onReceiveFrame(ByteBuffer.wrap(mClient.recv(ans.size)));
-                        }
+                    if (ans.code == 2 && ans.size >=40 && ans.databuf!=null) {    // ANSOK : 2
+                        // treat file header as a frame
+                        onReceiveFrame(ByteBuffer.wrap( ans.databuf ));
                     }
 
                     if( mUIHandler != null ) {
@@ -333,8 +315,6 @@ public class PWPlaybackStream extends PWStream {
 
             case PWMessage.MSG_PW_GETCLIPLIST:
                 if( connect() && mPlaybackHandle!=0  ) {
-                    DvrClient.Ans ans = new DvrClient.Ans();
-                    byte[] buffer = null ;
 
                     int [] clipInfo = {};
                     int [] lockInfo = {};
@@ -355,16 +335,14 @@ public class PWPlaybackStream extends PWStream {
                     dvrtime.putInt(0, msg.arg1/10000);           // year
                     dvrtime.putInt(4, (msg.arg1/100)%100 );      // month
                     dvrtime.putInt(8, msg.arg1%100 );            // day
-                    mClient.sendReq(210,mPlaybackHandle,32);
-                    mClient.send(dvrtime.array(),0,32);
-                    if( mClient.recvAns(ans) && ans.code == 204 ) {    //ANSSTREAMDAYINFO : 204
+                    DvrClient.Ans ans = mClient.request(210,mPlaybackHandle,dvrtime.array());
+                    if( ans.code == 204 ) {    //ANSSTREAMDAYINFO : 204
                         // struct dayinfoitem {
                         //    int ontime  ;		// seconds of the day
                         //    int offtime ;		// seconds of the day
                         // } ;
-                        if (ans.size > 0) {
-                            buffer = mClient.recv(ans.size);
-                            ByteBuffer bb = ByteBuffer.wrap(buffer);
+                        if ( ans.databuf != null) {
+                            ByteBuffer bb = ByteBuffer.wrap(ans.databuf);
                             bb.order(ByteOrder.LITTLE_ENDIAN);
                             int s = ans.size/8 ;
                             if( s>0 ) {
@@ -382,16 +360,15 @@ public class PWPlaybackStream extends PWStream {
                     }
 
                     // REQLOCKINFO   (212)
-                    mClient.sendReq(212,mPlaybackHandle,32);
-                    mClient.send(dvrtime.array(),0,32);
-                    if( mClient.recvAns(ans) && ans.code == 204 ) {    //ANSSTREAMDAYINFO : 204
+                    ans = mClient.request(212,mPlaybackHandle,dvrtime.array());
+
+                    if( ans.code == 204 ) {    //ANSSTREAMDAYINFO : 204
                         // struct dayinfoitem {
                         //    int ontime  ;		// seconds of the day
                         //    int offtime ;		// seconds of the day
                         // } ;
-                        if (ans.size > 0) {
-                            buffer = mClient.recv(ans.size);
-                            ByteBuffer bb = ByteBuffer.wrap(buffer);
+                        if ( ans.databuf !=null ){
+                            ByteBuffer bb = ByteBuffer.wrap(ans.databuf);
                             bb.order(ByteOrder.LITTLE_ENDIAN);
                             int s = ans.size/8 ;
                             if( s>0 ) {
@@ -423,22 +400,17 @@ public class PWPlaybackStream extends PWStream {
             mPlaybackHandle = 0 ; // reset handle
 
             if( mClient.isConnected() ) {
-                byte [] buffer ;
-                DvrClient.Ans ans = new DvrClient.Ans();
-
                 // verify tvs key
                 checkTvsKey(mClient);
 
                 //  REQSTREAMOPEN   (201)
-                mClient.sendReq(201, mChannel, 0);
-                if (mClient.recvAns(ans) && ans.code == 201) {    //ANSSTREAMOPEN : 201
-                    if (ans.size > 0) {
-                        buffer = mClient.recv(ans.size);            // this is 40 bytes file header, not used
-                        if( ans.size >=40 ) {
-                            onReceiveFrame( ByteBuffer.wrap(buffer) ) ;
-                        }
-                    }
+                DvrClient.Ans ans = mClient.request(201, mChannel );
+                if( ans.code == 201 ) {        //ANSSTREAMOPEN : 201
                     mPlaybackHandle = ans.data;
+                    if( ans.size >= 40 ) {
+                        // this is 40 bytes file header
+                        onReceiveFrame( ByteBuffer.wrap(ans.databuf) ) ;
+                    }
                 }
             }
         }

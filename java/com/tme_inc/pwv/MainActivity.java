@@ -1,6 +1,7 @@
 package com.tme_inc.pwv;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
@@ -9,6 +10,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.database.CursorJoiner;
 import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -44,11 +46,13 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class MainActivity extends Activity {
@@ -64,9 +68,9 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
 
         m_dvrIp = "192.168.1.100" ;
         m_connectMode = DvrClient.CONN_USB ;
@@ -82,7 +86,21 @@ public class MainActivity extends Activity {
             }
         });
 
-        Button button = (Button)findViewById(R.id.button_local);
+
+        Button button = (Button)findViewById(R.id.button_usb);
+        button.setOnClickListener(new Button.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //Intent intent = new Intent(getBaseContext(), Playback.class);
+                //intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                //startActivity(intent);
+                m_connectMode = DvrClient.CONN_USB ;
+                updateDeviceList(true);
+
+            }
+        });
+
+        button = (Button)findViewById(R.id.button_local);
         button.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -109,23 +127,15 @@ public class MainActivity extends Activity {
             }
         });
 
-        button = (Button)findViewById(R.id.button_usb);
-        button.setOnClickListener(new Button.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //Intent intent = new Intent(getBaseContext(), Playback.class);
-                //intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                //startActivity(intent);
-                m_connectMode = DvrClient.CONN_USB ;
-                updateDeviceList(true);
-            }
-        });
 
+        Intent i = new Intent( this, PwvService.class);
+        startService(i);
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        updateDeviceList( true );
     }
 
     void showMessage(String msg) {
@@ -259,6 +269,10 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
 
         SharedPreferences prefs = getSharedPreferences("pwv", 0);
         m_connectMode = prefs.getInt("connMode", DvrClient.CONN_DIRECT );

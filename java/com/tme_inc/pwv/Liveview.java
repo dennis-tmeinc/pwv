@@ -267,34 +267,40 @@ public class Liveview extends PwViewActivity {
             return ;
         }
 
-        if( mplayer.inputReady() && mstream.videoAvailable() ) {
-            mplayer.writeInput(mstream.getVideoFrame());
+        while( mplayer.videoInputReady() && mstream.videoAvailable() ) {
+            mplayer.videoInput(mstream.getVideoFrame());
         }
 
-        if( mstream.audioAvailable() ) {
-            mplayer.writeAudio(mstream.getAudioFrame()) ;
+        while( mstream.audioAvailable() ) {
+            mplayer.audioInput(mstream.getAudioFrame()) ;
         }
 
         // Render output buffer if available
-        if( mplayer.outputReady() ) {
+        if( mplayer.videoOutputReady() ) {
             long ats = mplayer.getAudioTimestamp();
             long vts = mplayer.getVideoTimestamp();
             if( vts<=ats || ats==0 ) {
-                if( mplayer.popOutput(true) ) {
+                if (mplayer.popOutput(true)) {
                     if (m_loading) {
                         findViewById(R.id.loadingBar).setVisibility(View.INVISIBLE);
                         findViewById(R.id.loadingText).setVisibility(View.INVISIBLE);
                         m_loading = false;
                     }
                 }
+
+                MediaFrame txtFrame = null ;
+                while( mstream.textAvailable()){
+                    txtFrame = mstream.getTextFrame() ;
+                    if( txtFrame.timestamp >=vts ) {
+                        break ;
+                    }
+                }
+                if( txtFrame != null) {
+                    displayOSD( txtFrame );
+                }
             }
         }
 
-        MediaFrame txtFrame = null ;
-        while( mstream.textAvailable()){
-            txtFrame = mstream.getTextFrame() ;
-        }
-        displayOSD( txtFrame );
 
         // PW status update
         mStatusTime += deltaTime ;
@@ -419,7 +425,6 @@ public class Liveview extends PwViewActivity {
                     if (appmode <= 2) {
                         screen_KeepOn(true);               // put screen to sleep if device pass shutdown delay
                     } else {
-                        setSreenTimeout(3000);
                         screen_KeepOn(false);               // put screen to sleep if device pass shutdown delay
                     }
                     xappmod = appmode;

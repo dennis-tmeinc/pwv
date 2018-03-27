@@ -335,7 +335,7 @@ public class TagEventActivity extends Activity {
             len = bVri.length;
             if (len > 64) len = 64;
             System.arraycopy(bVri, 0, vri, offset, len);
-            offset += 64;
+            offset += 64 ;
 
             // incident classification
             str = tagFrag.getPref("tag_incident_classification") ;

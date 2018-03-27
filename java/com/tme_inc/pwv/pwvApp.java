@@ -6,9 +6,9 @@ import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.provider.Settings;
 
-import com.sun.jna.Function;
-import com.sun.jna.Native;
-import com.sun.jna.Platform;
+//import com.sun.jna.Function;
+//import com.sun.jna.Native;
+//import com.sun.jna.Platform;
 
 import java.io.File;
 import java.io.FileInputStream;

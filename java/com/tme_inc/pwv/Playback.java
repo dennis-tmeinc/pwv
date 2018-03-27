@@ -411,11 +411,11 @@ public class Playback extends PwViewActivity {
 
         // fill vidoe decoder buffer
         frame = mstream.peekVideoFrame() ;
-        if( frame!=null && mplayer.inputReady() ) {
+        if( frame!=null && mplayer.videoInputReady() ) {
             mstream.getVideoFrame();
             // fast play, only output key frames
             if(m_playSpeed<=4000 || frame.flags != 0) {
-                mplayer.writeInput(frame);
+                mplayer.videoInput(frame);
             }
         }
 
@@ -425,7 +425,7 @@ public class Playback extends PwViewActivity {
             if( m_playSpeed == 1000 ) {
                 if( (frame.timestamp-playFrameTime)<2000 ){
                     mstream.getAudioFrame();
-                    mplayer.writeAudio(frame);
+                    mplayer.audioInput(frame);
                 }
             }
             else if( frame.timestamp < playFrameTime ) {
@@ -450,7 +450,7 @@ public class Playback extends PwViewActivity {
         }
 
         // Render output buffer if available
-        if( mplayer.outputReady() ) {
+        if( mplayer.videoOutputReady() ) {
 
             long frametime = mplayer.getVideoTimestamp();
             boolean rendered = false ;

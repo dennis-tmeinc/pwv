@@ -47,8 +47,7 @@ public class PWProtocol extends DvrClient {
         close();
         if( mTask!=null ) {
             mTask.cancel(true);
-            mTask.mlistener = null ;    // disable listener
-            mTask = null ;
+            mTask=null ;
         }
     }
     //
@@ -72,12 +71,18 @@ public class PWProtocol extends DvrClient {
         }
 
         @Override
+        protected void onCancelled(Bundle bundle) {
+            super.onCancelled(bundle);
+            mTask = null ;
+        }
+
+        @Override
         protected void onPostExecute(Bundle result) {
             super.onPostExecute(result);
-            mTask = null;
             if ( mlistener != null && result != null ) {
                 mlistener.onPWEvent(result);
             }
+            mTask = null;
         }
     }
 
@@ -90,49 +95,46 @@ public class PWProtocol extends DvrClient {
         @Override
         protected Bundle doInBackground(Void... avoid) {
             Bundle result = null;
-            if( connect() ) {
-                int vri_s = 0 ;
-                int vri_rsize = 468 ;
+            int vri_s = 0 ;
+            int vri_rsize = 468 ;
 
-                result = new Bundle() ;
-                Ans ans = new Ans() ;
-                // REQ:
-                // REQGETDATA   (302)
-                // PROTOCOL_PW_GETVRILISTSIZE	(1004)
-                sendReq( 302, 1004, 0 );
-                // ANS:
-                // ANSGETDATA   (302)
-                if( recvAns(ans) && ans.code==302 && ans.size>0 ){
-                    byte [] buf = recv( ans.size );
-                    if( buf != null ) {
-                        String vrisize = new String(buf, 0, ans.size).split("\0")[0];
-                        String vris[] = vrisize.split(",");
-                        if( vris.length>0 ) {
-                            vri_s = Integer.parseInt(vris[0]);
-                            result.putInt("VriListSize",vri_s );
-                        }
-                        if( vris.length>1 ) {
-                            vri_rsize = Integer.parseInt(vris[1]) ;
-                            result.putInt("VriItemSize", vri_rsize);
-                        }
-                    }
-                }
-                // REQ:
-                // REQGETDATA   (302)
-                // PROTOCOL_PW_GETVRILIST	(1005)
-                sendReq( 302, 1005, 0 );
-                // ANS:
-                // ANSGETDATA   (302)
-                if( recvAns(ans) && ans.code==302 && ans.size>=vri_rsize ){
-                    byte [] buf = recv( ans.size );
-                    if( buf != null ) {
-                        vri_s = ans.size / vri_rsize ;
+            result = new Bundle() ;
+            Ans ans ;
+            // REQ:
+            // REQGETDATA   (302)
+            // PROTOCOL_PW_GETVRILISTSIZE	(1004)
+            ans = request( 302, 1004 );
+            // ANS:
+            // ANSGETDATA   (302)
+            if( ans.code==302 && ans.size>0 ) {
+                if( ans.databuf != null ) {
+                    String vrisize = new String(ans.databuf, 0, ans.size).split("\0")[0];
+                    String vris[] = vrisize.split(",");
+                    if( vris.length>0 ) {
+                        vri_s = Integer.parseInt(vris[0]);
                         result.putInt("VriListSize",vri_s );
-                        result.putByteArray("VriList", buf);
+                    }
+                    if( vris.length>1 ) {
+                        vri_rsize = Integer.parseInt(vris[1]) ;
+                        result.putInt("VriItemSize", vri_rsize);
                     }
                 }
-
             }
+
+            // REQ:
+            // REQGETDATA   (302)
+            // PROTOCOL_PW_GETVRILIST	(1005)
+            ans = request( 302, 1005 );
+            // ANS:
+            // ANSGETDATA   (302)
+            if( ans.code==302 && ans.size>=vri_rsize ) {
+                if (ans.databuf != null) {
+                    vri_s = ans.size / vri_rsize;
+                    result.putInt("VriListSize", vri_s);
+                    result.putByteArray("VriList", ans.databuf);
+                }
+            }
+
             return result;
         }
     }
@@ -150,17 +152,16 @@ public class PWProtocol extends DvrClient {
         @Override
         protected Bundle doInBackground(byte[]... vridata) {
             Bundle result = null;
-            if( connect() && vridata.length>0 && vridata[0].length>0 ) {
+            if( vridata.length>0 && vridata[0].length>0 ) {
                 result = new Bundle();
-                Ans ans = new Ans() ;
                 // REQ:
                 // REQSENDDATA   (301)
                 // PROTOCOL_PW_SETVRILIST		(1006)
-                sendReq( 301, 1006, vridata[0] );
+                Ans ans = request( 301, 1006, vridata[0] );
 
                 // ANS:
                 // ANSOK   (2)
-                if( recvAns(ans) && ans.code==2 ){
+                if( ans.code==2 ){
                     result.putInt("Result", 1);
                 }
 
@@ -183,29 +184,25 @@ public class PWProtocol extends DvrClient {
         @Override
         protected Bundle doInBackground(Void... aVoid) {
             Bundle result = null;
-            if( connect() ) {
-                Ans ans = new Ans() ;
 
-                // REQ:
-                // REQGETDATA   (302)
-                // PROTOCOL_PW_GETPOLICEIDLIST	(1002)
-                sendReq(302, 1002, 0);
+            // REQ:
+            // REQGETDATA   (302)
+            // PROTOCOL_PW_GETPOLICEIDLIST	(1002)
+            Ans ans = request(302, 1002);
 
-                // ANS:
-                // ANSGETDATA   (302)
-                if( recvAns(ans) && ans.code==302 && ans.size>0 ){
-                    byte[] data = recv(ans.size) ;
-                    if( data!=null ) {
-                        int nid = ans.data ;
-                        int idlen = ans.size/nid ;
-                        result = new Bundle();
-                        result.putInt("policeId_number", ans.data);
-                        result.putInt("policeId_size", ans.size );
-                        result.putByteArray("policeId_list", data);
-                    }
+            // ANS:
+            // ANSGETDATA   (302)
+            if( ans.code==302 && ans.size>0 ){
+                if( ans.databuf!=null ) {
+                    int nid = ans.data ;
+                    int idlen = ans.size/nid ;
+                    result = new Bundle();
+                    result.putInt("policeId_number", ans.data);
+                    result.putInt("policeId_size", ans.size );
+                    result.putByteArray("policeId_list", ans.databuf);
                 }
-
             }
+
             return result;
         }
 
@@ -225,21 +222,19 @@ public class PWProtocol extends DvrClient {
         @Override
         protected Bundle doInBackground(String ... oids) {
             Bundle result = null;
-            if( connect() && oids.length>0 && oids[0]!=null ) {
+            if( oids.length>0 && oids[0]!=null ) {
                 String officerId = oids[0]+"\u0000" ;   // append null terminate
                 byte [] oidarray = officerId.getBytes();
 
                 result = new Bundle();
-                Ans ans = new Ans() ;
                 // REQ:
                 // REQSENDDATA   (301)
                 // PROTOCOL_PW_SETPOLICEID		(1003)
-                sendReq( 301, 1003, oidarray.length );
-                send(oidarray, 0, oidarray.length);
+                Ans ans = request( 301, 1003, oidarray );
 
                 // ANS:
                 // ANSOK   (2)
-                if( recvAns(ans) && ans.code==2 ){
+                if( ans.code==2 ){
                     result.putInt("Result", 1);
                 }
             }
@@ -261,16 +256,15 @@ public class PWProtocol extends DvrClient {
         @Override
         protected Bundle doInBackground(Integer ... keys) {
             Bundle result = null;
-            if( connect() && keys.length>0 ) {
+            if( keys.length>0 ) {
                 result = new Bundle();
-                Ans ans = new Ans() ;
                 // REQ:
                 // REQ2KEYPAD   (230)
-                sendReq(230, keys[0], 0);
+                Ans ans = request(230, keys[0]);
 
                 // ANS:
                 // ANSOK   (2)
-                if( recvAns(ans) && ans.code==2 ){
+                if( ans.code==2 ){
                     result.putInt("Result", 1);
                 }
             }
@@ -291,8 +285,7 @@ public class PWProtocol extends DvrClient {
 
         @Override
         protected Bundle doInBackground(Boolean ... covs) {
-            if( connect() && covs.length>0 ) {
-                Ans ans = new Ans() ;
+            if( covs.length>0 ) {
                 byte [] cov = new byte[4] ;
                 if( covs[0] ) {
                     cov[0] = 1 ;
@@ -304,11 +297,10 @@ public class PWProtocol extends DvrClient {
                 // REQ:
                 // REQSENDDATA   (301)
                 // PROTOCOL_PW_SETCOVERTMODE		(1009)
-                sendReq(301, 1009, cov);
+                request(301, 1009, cov);
 
-                // ANS:
+                // ANS: (ignored)
                 // ANSOK   (2)\
-                recvAns(ans) ;
             }
             return null;
         }
@@ -328,57 +320,50 @@ public class PWProtocol extends DvrClient {
         @Override
         protected Bundle doInBackground(Void ... avoid) {
             Bundle result = null;
-            if( connect() ) {
-                result = new Bundle();
-                Ans ans = new Ans() ;
+            result = new Bundle();
 
-                // REQ:
-                // REQGETDATA   (302)
-                // PROTOCOL_PW_GETSTATUS   	(1001)
-                sendReq(302, 1001, 0);
+            // REQ:
+            // REQGETDATA   (302)
+            // PROTOCOL_PW_GETSTATUS   	(1001)
+            Ans ans = request(302, 1001);
 
-                // ANS:
-                // ANSGETDATA   (302)
-                if( recvAns(ans) && ans.code==302 && ans.size>0 ){
-                    byte[] data = recv(ans.size) ;
-                    if( data!=null ) {
-                        result.putByteArray("PWStatus", data);
-                    }
+            // ANS:
+            // ANSGETDATA   (302)
+            if( ans.code==302 && ans.size>0 ){
+                if( ans.databuf!=null ) {
+                    result.putByteArray("PWStatus", ans.databuf);
                 }
-
-                // REQ:
-                // REQGETDATA   (302)
-                // PROTOCOL_PW_GETDISKINFO   	(1010)
-                sendReq(302, 1010, 0);
-
-                // ANS:
-                // ANSGETDATA   (302)
-                if( recvAns(ans) && ans.code==302 && ans.size>0 ){
-                    byte[] data = recv(ans.size) ;
-                    if( data!=null ) {
-                        String warning = new String(data);
-                        result.putString("DiskInfo", warning.trim());
-                    }
-                }
-
-                /*
-                // REQ:
-                // REQGETDATA   (302)
-                // PROTOCOL_PW_GETWARNINGMSG   	(1008)
-                sendReq(302, 1008, 0);
-
-                // ANS:
-                // ANSGETDATA   (302)
-                if( recvAns(ans) && ans.code==302 && ans.size>0 ){
-                    byte[] data = recv(ans.size) ;
-                    if( data!=null ) {
-                        String warning = new String(data);
-                        result.putString("Warningmsg", warning.trim());
-                    }
-                }
-                */
-
             }
+
+            // REQ:
+            // REQGETDATA   (302)
+            // PROTOCOL_PW_GETDISKINFO   	(1010)
+            ans = request(302, 1010);
+
+            // ANS:
+            // ANSGETDATA   (302)
+            if( ans.code==302 && ans.size>0 ){
+                if( ans.databuf!=null ) {
+                    String warning = new String(ans.databuf);
+                    result.putString("DiskInfo", warning.trim());
+                }
+            }
+
+            /*
+            // REQ:
+            // REQGETDATA   (302)
+            // PROTOCOL_PW_GETWARNINGMSG   	(1008)
+
+            ans = request( 302, 1008 ) ;
+
+            // ANS:
+            // ANSGETDATA   (302)
+            if( ans.code==302 && ans.size>0 ){
+                String warning = new String(ans.databuf);
+                result.putString("Warningmsg", warning.trim());
+            }
+            */
+
             return result;
         }
     }
@@ -523,14 +508,12 @@ public class PWProtocol extends DvrClient {
                             String device = udpPacket.getAddress().getHostAddress();
                             if( deviceSet.add(device) ) {
                                 if (connect(device, mPort)) {
-                                    DvrClient.Ans ans = new DvrClient.Ans();
                                     // get host name
                                     //  REQSERVERNAME, 10
-                                    sendReq(10, 0, 0);
+                                    Ans ans = request(10);
                                     //  ANSSERVERNAME  12
-                                    if (recvAns(ans) && ans.size > 0 && ans.code == 12) {
-                                        byte[] hostname = recv(ans.size);
-                                        publishProgress(device, (new String(hostname)).trim());
+                                    if ( ans.code == 12 && ans.databuf!=null) {
+                                        publishProgress(device, (new String(ans.databuf)).trim());
                                     }
                                 }
                                 close();
@@ -601,53 +584,44 @@ public class PWProtocol extends DvrClient {
 
         @Override
         protected Bundle doInBackground(Integer ... params) {
-            if( connect() ) {
-                Ans ans = new Ans() ;
 
-                int disk = params[0] ;
-                int daylist[] = new int [0] ;
+            int disk = params[0] ;
+            int daylist[] = new int [0] ;
 
-                // REQDAYLIST   (238)
-                sendReq(238, 0, 0);
+            // REQDAYLIST   (238)
+            Ans ans = request(238);
 
-                // ANSDAYLIST   (223)
-                if( recvAns(ans) && ans.code==223 && ans.size>0 ){
-                    byte [] buf = recv( ans.size );
-                    if( buf != null ) {
-                        ByteBuffer daybuffer = ByteBuffer.wrap(buf);
-                        daybuffer.order(ByteOrder.LITTLE_ENDIAN) ;
-                        daylist = new int [ans.size/4] ;
-                        for( int i=0; i<daylist.length; i++) {
-                            daylist[i] = daybuffer.getInt(i*4);
-                        }
-                    }
+            // ANSDAYLIST   (223)
+            if( ans.code==223 && ans.databuf != null ){
+                ByteBuffer daybuffer = ByteBuffer.wrap(ans.databuf);
+                daybuffer.order(ByteOrder.LITTLE_ENDIAN) ;
+                daylist = new int [ans.size/4] ;
+                for( int i=0; i<daylist.length; i++) {
+                    daylist[i] = daybuffer.getInt(i*4);
                 }
+            }
 
-                for( int date : daylist) {
+            for( int date : daylist) {
 
-                    ByteBuffer request = ByteBuffer.allocate(4) ;
-                    request.order(ByteOrder.LITTLE_ENDIAN) ;
-                    request.putInt(0, date) ;
+                ByteBuffer request = ByteBuffer.allocate(4) ;
+                request.order(ByteOrder.LITTLE_ENDIAN) ;
+                request.putInt(0, date) ;
 
-                    // REQ:
-                    // REQDAYCLIPLIST   (237)
-                    sendReq(237, disk, request.array() );
+                // REQ:
+                // REQDAYCLIPLIST   (237)
+                ans = request(237, disk, request.array() );
 
-                    // ANS:
-                    // ANSDAYCLIPLIST   (222)
-                    if( recvAns(ans) && ans.code==222 && ans.size>0 ){
-                        byte [] buf = recv( ans.size );
-                        if( buf != null ) {
-                            String clips = new String(buf, 0, ans.size);
-                            String cliplist[] = clips.split(",");
-                            publishProgress(cliplist);
-                        }
-                    }
-
+                // ANS:
+                // ANSDAYCLIPLIST   (222)
+                if( ans.code==222 && ans.databuf != null ) {
+                    String clips = new String(ans.databuf, 0, ans.size);
+                    String cliplist[] = clips.split(",");
+                    publishProgress(cliplist);
                 }
-
 
             }
+
+
             Bundle result = new Bundle();
             result.putBoolean("Complete", true);
             return result;
@@ -680,26 +654,19 @@ public class PWProtocol extends DvrClient {
         @Override
         protected Bundle doInBackground(Integer ... params) {
             Bundle result = new Bundle();
-            if( connect() ) {
-                Ans ans = new Ans() ;
+            int daylist[] = new int [0] ;
 
-                int daylist[] = new int [0] ;
-
-                // REQDAYLIST   (238)
-                sendReq(238, 0, 0);
-                // ANSDAYLIST   (223)
-                if( recvAns(ans) && ans.code==223 && ans.size>0 ){
-                    byte [] buf = recv( ans.size );
-                    if( buf != null ) {
-                        ByteBuffer daybuffer = ByteBuffer.wrap(buf);
-                        daybuffer.order(ByteOrder.LITTLE_ENDIAN) ;
-                        daylist = new int [ans.size/4] ;
-                        for( int i=0; i<daylist.length; i++) {
-                            daylist[i] = daybuffer.getInt(i*4);
-                        }
-                        result.putIntArray("daylist", daylist);
-                    }
+            // REQDAYLIST   (238)
+            Ans ans = request(238);
+            // ANSDAYLIST   (223)
+            if( ans.code==223 && ans.databuf != null ) {
+                ByteBuffer daybuffer = ByteBuffer.wrap(ans.databuf);
+                daybuffer.order(ByteOrder.LITTLE_ENDIAN) ;
+                daylist = new int [ans.size/4] ;
+                for( int i=0; i<daylist.length; i++) {
+                    daylist[i] = daybuffer.getInt(i*4);
                 }
+                result.putIntArray("daylist", daylist);
             }
             result.putBoolean("Complete", true);
             return result;

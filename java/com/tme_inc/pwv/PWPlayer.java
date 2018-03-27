@@ -21,6 +21,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.ShortBuffer;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -47,8 +49,7 @@ public class PWPlayer {
     private MediaFormat mMediaFormat;
 
     // audio output
-    final static int mAudioChunkSize = 128 ;
-    private int mAudioHiLimit ;
+    final static int mAudioChunkSize = 256 ;
     private int mAudioLoLimit ;
     private ArrayBlockingQueue<MediaFrame> mAudioBuffers ;
     Thread mAudioThread;
@@ -84,10 +85,8 @@ public class PWPlayer {
         mDecoder.start();
 
         // start audio buffering thread
-        int audioLimit = (mAudioRate/2)/mAudioChunkSize ;
-        mAudioBuffers  = new ArrayBlockingQueue( audioLimit ) ;
-        mAudioHiLimit = audioLimit/2 ;
-        mAudioLoLimit = audioLimit/4 ;
+        mAudioLoLimit = 1 ;
+        mAudioBuffers  = new ArrayBlockingQueue( 5 ) ;
 
         audioTimestamp = 0 ;
         mAudioThread = new Thread(new Runnable() {
@@ -250,7 +249,7 @@ public class PWPlayer {
         mAudioCodec = audio_codec ;
     }
 
-    public boolean inputReady() {
+    public boolean videoInputReady() {
         if(m_AvailableInputBuffer<0) {
             try {
                 m_AvailableInputBuffer = mDecoder.dequeueInputBuffer(0);
@@ -263,8 +262,8 @@ public class PWPlayer {
         return m_AvailableInputBuffer>=0 ;
     }
 
-    public boolean writeInput(MediaFrame input) {
-        if( input==null || ! inputReady()  ) return false ;
+    public boolean videoInput(MediaFrame input) {
+        if( input==null || ! videoInputReady()  ) return false ;
 
         int ilen = input.len();
         if( ilen>0 ) {
@@ -300,7 +299,7 @@ public class PWPlayer {
         return m_OutputBufferInfo.presentationTimeUs/1000 ;
     }
 
-    public boolean outputReady() {
+    public boolean videoOutputReady() {
         if( m_AvailableOutputBuffer<0 ) {
             try {
                 m_AvailableOutputBuffer = mDecoder.dequeueOutputBuffer(m_OutputBufferInfo, 0);
@@ -314,7 +313,7 @@ public class PWPlayer {
 
     public boolean popOutput( boolean render ) {
         try {
-            if( outputReady() ) {
+            if( videoOutputReady() ) {
                 // releases the buffer back to the codec
                 mDecoder.releaseOutputBuffer(m_AvailableOutputBuffer, render );
                 m_AvailableOutputBuffer = -1 ;
@@ -334,83 +333,85 @@ public class PWPlayer {
 
     // ref: https://en.wikipedia.org/wiki/G.711
     // to generate this table:
-    //   ffmpeg -f u8 -acodec pcm_mulaw -ar 8000 -i <0-255> -f s16le <output>
+    //   create a 256 bytes binary file with value from 0 - 255
+    //   ffmpeg -f u8 -acodec pcm_mulaw -ar 8000 -i <inputfile> -f s16le <output>
     static final short ulaw_table[] =
-    {
-        -0x7d7c, -0x797c, -0x757c, -0x717c, -0x6d7c, -0x697c, -0x657c, -0x617c,
-        -0x5d7c, -0x597c, -0x557c, -0x517c, -0x4d7c, -0x497c, -0x457c, -0x417c,
-        -0x3e7c, -0x3c7c, -0x3a7c, -0x387c, -0x367c, -0x347c, -0x327c, -0x307c,
-        -0x2e7c, -0x2c7c, -0x2a7c, -0x287c, -0x267c, -0x247c, -0x227c, -0x207c,
-        -0x1efc, -0x1dfc, -0x1cfc, -0x1bfc, -0x1afc, -0x19fc, -0x18fc, -0x17fc,
-        -0x16fc, -0x15fc, -0x14fc, -0x13fc, -0x12fc, -0x11fc, -0x10fc, -0x0ffc,
-        -0x0f3c, -0x0ebc, -0x0e3c, -0x0dbc, -0x0d3c, -0x0cbc, -0x0c3c, -0x0bbc,
-        -0x0b3c, -0x0abc, -0x0a3c, -0x09bc, -0x093c, -0x08bc, -0x083c, -0x07bc,
-        -0x075c, -0x071c, -0x06dc, -0x069c, -0x065c, -0x061c, -0x05dc, -0x059c,
-        -0x055c, -0x051c, -0x04dc, -0x049c, -0x045c, -0x041c, -0x03dc, -0x039c,
-        -0x036c, -0x034c, -0x032c, -0x030c, -0x02ec, -0x02cc, -0x02ac, -0x028c,
-        -0x026c, -0x024c, -0x022c, -0x020c, -0x01ec, -0x01cc, -0x01ac, -0x018c,
-        -0x0174, -0x0164, -0x0154, -0x0144, -0x0134, -0x0124, -0x0114, -0x0104,
-        -0x00f4, -0x00e4, -0x00d4, -0x00c4, -0x00b4, -0x00a4, -0x0094, -0x0084,
-        -0x0078, -0x0070, -0x0068, -0x0060, -0x0058, -0x0050, -0x0048, -0x0040,
-        -0x0038, -0x0030, -0x0028, -0x0020, -0x0018, -0x0010, -0x0008, -0x0001,
-        0x7d7c,  0x797c,  0x757c,  0x717c,  0x6d7c,  0x697c,  0x657c,  0x617c,
-        0x5d7c,  0x597c,  0x557c,  0x517c,  0x4d7c,  0x497c,  0x457c,  0x417c,
-        0x3e7c,  0x3c7c,  0x3a7c,  0x387c,  0x367c,  0x347c,  0x327c,  0x307c,
-        0x2e7c,  0x2c7c,  0x2a7c,  0x287c,  0x267c,  0x247c,  0x227c,  0x207c,
-        0x1efc,  0x1dfc,  0x1cfc,  0x1bfc,  0x1afc,  0x19fc,  0x18fc,  0x17fc,
-        0x16fc,  0x15fc,  0x14fc,  0x13fc,  0x12fc,  0x11fc,  0x10fc,  0x0ffc,
-        0x0f3c,  0x0ebc,  0x0e3c,  0x0dbc,  0x0d3c,  0x0cbc,  0x0c3c,  0x0bbc,
-        0x0b3c,  0x0abc,  0x0a3c,  0x09bc,  0x093c,  0x08bc,  0x083c,  0x07bc,
-        0x075c,  0x071c,  0x06dc,  0x069c,  0x065c,  0x061c,  0x05dc,  0x059c,
-        0x055c,  0x051c,  0x04dc,  0x049c,  0x045c,  0x041c,  0x03dc,  0x039c,
-        0x036c,  0x034c,  0x032c,  0x030c,  0x02ec,  0x02cc,  0x02ac,  0x028c,
-        0x026c,  0x024c,  0x022c,  0x020c,  0x01ec,  0x01cc,  0x01ac,  0x018c,
-        0x0174,  0x0164,  0x0154,  0x0144,  0x0134,  0x0124,  0x0114,  0x0104,
-        0x00f4,  0x00e4,  0x00d4,  0x00c4,  0x00b4,  0x00a4,  0x0094,  0x0084,
-        0x0078,  0x0070,  0x0068,  0x0060,  0x0058,  0x0050,  0x0048,  0x0040,
-        0x0038,  0x0030,  0x0028,  0x0020,  0x0018,  0x0010,  0x0008,  0x0000
-    };
+            {
+                    -0x7d7c, -0x797c, -0x757c, -0x717c, -0x6d7c, -0x697c, -0x657c, -0x617c,
+                    -0x5d7c, -0x597c, -0x557c, -0x517c, -0x4d7c, -0x497c, -0x457c, -0x417c,
+                    -0x3e7c, -0x3c7c, -0x3a7c, -0x387c, -0x367c, -0x347c, -0x327c, -0x307c,
+                    -0x2e7c, -0x2c7c, -0x2a7c, -0x287c, -0x267c, -0x247c, -0x227c, -0x207c,
+                    -0x1efc, -0x1dfc, -0x1cfc, -0x1bfc, -0x1afc, -0x19fc, -0x18fc, -0x17fc,
+                    -0x16fc, -0x15fc, -0x14fc, -0x13fc, -0x12fc, -0x11fc, -0x10fc, -0x0ffc,
+                    -0x0f3c, -0x0ebc, -0x0e3c, -0x0dbc, -0x0d3c, -0x0cbc, -0x0c3c, -0x0bbc,
+                    -0x0b3c, -0x0abc, -0x0a3c, -0x09bc, -0x093c, -0x08bc, -0x083c, -0x07bc,
+                    -0x075c, -0x071c, -0x06dc, -0x069c, -0x065c, -0x061c, -0x05dc, -0x059c,
+                    -0x055c, -0x051c, -0x04dc, -0x049c, -0x045c, -0x041c, -0x03dc, -0x039c,
+                    -0x036c, -0x034c, -0x032c, -0x030c, -0x02ec, -0x02cc, -0x02ac, -0x028c,
+                    -0x026c, -0x024c, -0x022c, -0x020c, -0x01ec, -0x01cc, -0x01ac, -0x018c,
+                    -0x0174, -0x0164, -0x0154, -0x0144, -0x0134, -0x0124, -0x0114, -0x0104,
+                    -0x00f4, -0x00e4, -0x00d4, -0x00c4, -0x00b4, -0x00a4, -0x0094, -0x0084,
+                    -0x0078, -0x0070, -0x0068, -0x0060, -0x0058, -0x0050, -0x0048, -0x0040,
+                    -0x0038, -0x0030, -0x0028, -0x0020, -0x0018, -0x0010, -0x0008, -0x0001,
+                    0x7d7c,  0x797c,  0x757c,  0x717c,  0x6d7c,  0x697c,  0x657c,  0x617c,
+                    0x5d7c,  0x597c,  0x557c,  0x517c,  0x4d7c,  0x497c,  0x457c,  0x417c,
+                    0x3e7c,  0x3c7c,  0x3a7c,  0x387c,  0x367c,  0x347c,  0x327c,  0x307c,
+                    0x2e7c,  0x2c7c,  0x2a7c,  0x287c,  0x267c,  0x247c,  0x227c,  0x207c,
+                    0x1efc,  0x1dfc,  0x1cfc,  0x1bfc,  0x1afc,  0x19fc,  0x18fc,  0x17fc,
+                    0x16fc,  0x15fc,  0x14fc,  0x13fc,  0x12fc,  0x11fc,  0x10fc,  0x0ffc,
+                    0x0f3c,  0x0ebc,  0x0e3c,  0x0dbc,  0x0d3c,  0x0cbc,  0x0c3c,  0x0bbc,
+                    0x0b3c,  0x0abc,  0x0a3c,  0x09bc,  0x093c,  0x08bc,  0x083c,  0x07bc,
+                    0x075c,  0x071c,  0x06dc,  0x069c,  0x065c,  0x061c,  0x05dc,  0x059c,
+                    0x055c,  0x051c,  0x04dc,  0x049c,  0x045c,  0x041c,  0x03dc,  0x039c,
+                    0x036c,  0x034c,  0x032c,  0x030c,  0x02ec,  0x02cc,  0x02ac,  0x028c,
+                    0x026c,  0x024c,  0x022c,  0x020c,  0x01ec,  0x01cc,  0x01ac,  0x018c,
+                    0x0174,  0x0164,  0x0154,  0x0144,  0x0134,  0x0124,  0x0114,  0x0104,
+                    0x00f4,  0x00e4,  0x00d4,  0x00c4,  0x00b4,  0x00a4,  0x0094,  0x0084,
+                    0x0078,  0x0070,  0x0068,  0x0060,  0x0058,  0x0050,  0x0048,  0x0040,
+                    0x0038,  0x0030,  0x0028,  0x0020,  0x0018,  0x0010,  0x0008,  0x0000
+            };
 
     // to generate this table:
-    //   ffmpeg -f u8 -acodec pcm_alaw -ar 8000 -i <0-255>.raw -f s16le <output>.wav
+    //   create a 256 bytes binary file with value from 0 - 255
+    //   ffmpeg -f u8 -acodec pcm_alaw -ar 8000 -i <inputfile>.raw -f s16le <output>
     static final short alaw_table[] =
-    {
-        -0x1580, -0x1480, -0x1780, -0x1680, -0x1180, -0x1080, -0x1380, -0x1280,
-        -0x1d80, -0x1c80, -0x1f80, -0x1e80, -0x1980, -0x1880, -0x1b80, -0x1a80,
-        -0x0ac0, -0x0a40, -0x0bc0, -0x0b40, -0x08c0, -0x0840, -0x09c0, -0x0940,
-        -0x0ec0, -0x0e40, -0x0fc0, -0x0f40, -0x0cc0, -0x0c40, -0x0dc0, -0x0d40,
-        -0x5600, -0x5200, -0x5e00, -0x5a00, -0x4600, -0x4200, -0x4e00, -0x4a00,
-        -0x7600, -0x7200, -0x7e00, -0x7a00, -0x6600, -0x6200, -0x6e00, -0x6a00,
-        -0x2b00, -0x2900, -0x2f00, -0x2d00, -0x2300, -0x2100, -0x2700, -0x2500,
-        -0x3b00, -0x3900, -0x3f00, -0x3d00, -0x3300, -0x3100, -0x3700, -0x3500,
-        -0x0158, -0x0148, -0x0178, -0x0168, -0x0118, -0x0108, -0x0138, -0x0128,
-        -0x01d8, -0x01c8, -0x01f8, -0x01e8, -0x0198, -0x0188, -0x01b8, -0x01a8,
-        -0x0058, -0x0048, -0x0078, -0x0068, -0x0018, -0x0008, -0x0038, -0x0028,
-        -0x00d8, -0x00c8, -0x00f8, -0x00e8, -0x0098, -0x0088, -0x00b8, -0x00a8,
-        -0x0560, -0x0520, -0x05e0, -0x05a0, -0x0460, -0x0420, -0x04e0, -0x04a0,
-        -0x0760, -0x0720, -0x07e0, -0x07a0, -0x0660, -0x0620, -0x06e0, -0x06a0,
-        -0x02b0, -0x0290, -0x02f0, -0x02d0, -0x0230, -0x0210, -0x0270, -0x0250,
-        -0x03b0, -0x0390, -0x03f0, -0x03d0, -0x0330, -0x0310, -0x0370, -0x0350,
-        0x1580,  0x1480,  0x1780,  0x1680,  0x1180,  0x1080,  0x1380,  0x1280,
-        0x1d80,  0x1c80,  0x1f80,  0x1e80,  0x1980,  0x1880,  0x1b80,  0x1a80,
-        0x0ac0,  0x0a40,  0x0bc0,  0x0b40,  0x08c0,  0x0840,  0x09c0,  0x0940,
-        0x0ec0,  0x0e40,  0x0fc0,  0x0f40,  0x0cc0,  0x0c40,  0x0dc0,  0x0d40,
-        0x5600,  0x5200,  0x5e00,  0x5a00,  0x4600,  0x4200,  0x4e00,  0x4a00,
-        0x7600,  0x7200,  0x7e00,  0x7a00,  0x6600,  0x6200,  0x6e00,  0x6a00,
-        0x2b00,  0x2900,  0x2f00,  0x2d00,  0x2300,  0x2100,  0x2700,  0x2500,
-        0x3b00,  0x3900,  0x3f00,  0x3d00,  0x3300,  0x3100,  0x3700,  0x3500,
-        0x0158,  0x0148,  0x0178,  0x0168,  0x0118,  0x0108,  0x0138,  0x0128,
-        0x01d8,  0x01c8,  0x01f8,  0x01e8,  0x0198,  0x0188,  0x01b8,  0x01a8,
-        0x0058,  0x0048,  0x0078,  0x0068,  0x0018,  0x0008,  0x0038,  0x0028,
-        0x00d8,  0x00c8,  0x00f8,  0x00e8,  0x0098,  0x0088,  0x00b8,  0x00a8,
-        0x0560,  0x0520,  0x05e0,  0x05a0,  0x0460,  0x0420,  0x04e0,  0x04a0,
-        0x0760,  0x0720,  0x07e0,  0x07a0,  0x0660,  0x0620,  0x06e0,  0x06a0,
-        0x02b0,  0x0290,  0x02f0,  0x02d0,  0x0230,  0x0210,  0x0270,  0x0250,
-        0x03b0,  0x0390,  0x03f0,  0x03d0,  0x0330,  0x0310,  0x0370,  0x0350
-    };
+            {
+                    -0x1580, -0x1480, -0x1780, -0x1680, -0x1180, -0x1080, -0x1380, -0x1280,
+                    -0x1d80, -0x1c80, -0x1f80, -0x1e80, -0x1980, -0x1880, -0x1b80, -0x1a80,
+                    -0x0ac0, -0x0a40, -0x0bc0, -0x0b40, -0x08c0, -0x0840, -0x09c0, -0x0940,
+                    -0x0ec0, -0x0e40, -0x0fc0, -0x0f40, -0x0cc0, -0x0c40, -0x0dc0, -0x0d40,
+                    -0x5600, -0x5200, -0x5e00, -0x5a00, -0x4600, -0x4200, -0x4e00, -0x4a00,
+                    -0x7600, -0x7200, -0x7e00, -0x7a00, -0x6600, -0x6200, -0x6e00, -0x6a00,
+                    -0x2b00, -0x2900, -0x2f00, -0x2d00, -0x2300, -0x2100, -0x2700, -0x2500,
+                    -0x3b00, -0x3900, -0x3f00, -0x3d00, -0x3300, -0x3100, -0x3700, -0x3500,
+                    -0x0158, -0x0148, -0x0178, -0x0168, -0x0118, -0x0108, -0x0138, -0x0128,
+                    -0x01d8, -0x01c8, -0x01f8, -0x01e8, -0x0198, -0x0188, -0x01b8, -0x01a8,
+                    -0x0058, -0x0048, -0x0078, -0x0068, -0x0018, -0x0008, -0x0038, -0x0028,
+                    -0x00d8, -0x00c8, -0x00f8, -0x00e8, -0x0098, -0x0088, -0x00b8, -0x00a8,
+                    -0x0560, -0x0520, -0x05e0, -0x05a0, -0x0460, -0x0420, -0x04e0, -0x04a0,
+                    -0x0760, -0x0720, -0x07e0, -0x07a0, -0x0660, -0x0620, -0x06e0, -0x06a0,
+                    -0x02b0, -0x0290, -0x02f0, -0x02d0, -0x0230, -0x0210, -0x0270, -0x0250,
+                    -0x03b0, -0x0390, -0x03f0, -0x03d0, -0x0330, -0x0310, -0x0370, -0x0350,
+                    0x1580,  0x1480,  0x1780,  0x1680,  0x1180,  0x1080,  0x1380,  0x1280,
+                    0x1d80,  0x1c80,  0x1f80,  0x1e80,  0x1980,  0x1880,  0x1b80,  0x1a80,
+                    0x0ac0,  0x0a40,  0x0bc0,  0x0b40,  0x08c0,  0x0840,  0x09c0,  0x0940,
+                    0x0ec0,  0x0e40,  0x0fc0,  0x0f40,  0x0cc0,  0x0c40,  0x0dc0,  0x0d40,
+                    0x5600,  0x5200,  0x5e00,  0x5a00,  0x4600,  0x4200,  0x4e00,  0x4a00,
+                    0x7600,  0x7200,  0x7e00,  0x7a00,  0x6600,  0x6200,  0x6e00,  0x6a00,
+                    0x2b00,  0x2900,  0x2f00,  0x2d00,  0x2300,  0x2100,  0x2700,  0x2500,
+                    0x3b00,  0x3900,  0x3f00,  0x3d00,  0x3300,  0x3100,  0x3700,  0x3500,
+                    0x0158,  0x0148,  0x0178,  0x0168,  0x0118,  0x0108,  0x0138,  0x0128,
+                    0x01d8,  0x01c8,  0x01f8,  0x01e8,  0x0198,  0x0188,  0x01b8,  0x01a8,
+                    0x0058,  0x0048,  0x0078,  0x0068,  0x0018,  0x0008,  0x0038,  0x0028,
+                    0x00d8,  0x00c8,  0x00f8,  0x00e8,  0x0098,  0x0088,  0x00b8,  0x00a8,
+                    0x0560,  0x0520,  0x05e0,  0x05a0,  0x0460,  0x0420,  0x04e0,  0x04a0,
+                    0x0760,  0x0720,  0x07e0,  0x07a0,  0x0660,  0x0620,  0x06e0,  0x06a0,
+                    0x02b0,  0x0290,  0x02f0,  0x02d0,  0x0230,  0x0210,  0x0270,  0x0250,
+                    0x03b0,  0x0390,  0x03f0,  0x03d0,  0x0330,  0x0310,  0x0370,  0x0350
+            };
 
     // Audio Track tweaks, since AudioTrack.write() is blocking
-    private void audioRun(){
+    private void audioRun_x(){
 
         // init audio track
         short decode_table [] ;
@@ -427,11 +428,9 @@ public class PWPlayer {
                 mAudioRate  ,
                 AudioFormat.CHANNEL_OUT_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
-                audioBufsize, AudioTrack.MODE_STREAM);
+                audioBufsize*2, AudioTrack.MODE_STREAM);
 
         audioTrack.play();
-
-        short[] audioBuffer = new short [mAudioChunkSize] ;
 
         while( !Thread.interrupted() && mDecoder!=null ) {
             MediaFrame audioFrame = null;
@@ -441,34 +440,106 @@ public class PWPlayer {
                 audioFrame = null ;
             }
             if( audioFrame!=null ) {
-
                 int alen = audioFrame.len();
-                int apos = audioFrame.pos();
-                byte [] aa = audioFrame.array() ;
-                if( alen>mAudioChunkSize) alen=mAudioChunkSize ;
+                short[] audioBuffer = new short [alen] ;
+
+                int adj = 0 ;
+                // audio sync hack for live view
+                if( m_livemode && mAudioBuffers.size() > 0) {
+                    adj = 1 ;
+                }
+
+                // decode audio
                 int i ;
                 for( i = 0; i < alen; i++) {
-                    audioBuffer[i] = decode_table[ ((int)aa[apos+i]) & 0xff  ];
+                    audioBuffer[i] = decode_table[ audioFrame.geti(i) ] ;
                 }
-
-                if( m_livemode ) {
-                    // audio sync for live view
-                    int as = mAudioBuffers.size();
-                    if (as > mAudioHiLimit) {
-                        alen--;
-                    }
-                    else if (as < mAudioLoLimit) {
-                        audioTrack.write(audioBuffer, 0, 1);
-                        while( i-->0 && mAudioBuffers.size()==0 ) {
-                            Thread.yield();
-                            audioTrack.write(audioBuffer, 0, 1);
-                        }
-                    }
-                }
-
-                audioTrack.write(audioBuffer, 0, alen);
+                audioTrack.write(audioBuffer, 0, alen-adj);
                 audioTimestamp = audioFrame.timestamp ;
+            }
+        }
 
+        audioTrack.stop();
+        audioTrack.release();
+
+    }
+
+
+    // Audio Track tweaks, since AudioTrack.write() is blocking
+    private void audioRun(){
+
+        MediaCodec aCodec = null ;
+        String amime="audio/g711-mlaw" ;
+
+        if( mAudioCodec == 2 ) {
+            amime = "audio/g711-alaw";
+        }
+        else {
+            amime = "audio/g711-mlaw";
+        }
+
+        try {
+            aCodec = MediaCodec.createDecoderByType(amime);
+        } catch (IOException e) {
+            aCodec = null ;
+        } catch (IllegalArgumentException e) {
+            aCodec = null ;
+        }
+
+        if( aCodec==null ) {
+            audioRun_x();
+            return;
+        }
+
+        MediaFormat aInputformat =  MediaFormat.createAudioFormat(amime,mAudioRate, 1);
+        aCodec.configure(aInputformat, null, null, 0);
+        MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo ();
+        aCodec.start();
+
+        int audioBufsize = AudioTrack.getMinBufferSize(mAudioRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        AudioTrack audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC,
+                mAudioRate  ,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                audioBufsize*2, AudioTrack.MODE_STREAM);
+        audioTrack.play();
+
+        while( !Thread.interrupted() && mDecoder!=null ) {
+
+            // mediacodec test
+            int outputBufferId = aCodec.dequeueOutputBuffer(bufferInfo, 100000);
+            if (outputBufferId >= 0) {
+
+                audioTimestamp = bufferInfo.presentationTimeUs / 1000 ;
+
+                ByteBuffer outputBuffer = aCodec.getOutputBuffer(outputBufferId);
+                //MediaFormat format = aCodec.getOutputFormat(outputBufferId);
+
+                ShortBuffer samples = outputBuffer.order(ByteOrder.nativeOrder()).asShortBuffer();
+                int alen = samples.remaining() ;
+                short[] res = new short[alen];
+                for (int i = 0; i < alen; ++i) {
+                    res[i] = samples.get(i);
+                }
+                audioTrack.write(res, 0, alen);
+                aCodec.releaseOutputBuffer(outputBufferId, false);
+            }
+
+            MediaFrame audioFrame = null;
+            try {
+                audioFrame = mAudioBuffers.poll(1, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                audioFrame = null ;
+            }
+            if( audioFrame!=null ) {
+                // mediacodec test
+                int inputBufferId = aCodec.dequeueInputBuffer(100000);
+                if (inputBufferId >= 0) {
+                    ByteBuffer inputBuffer = aCodec.getInputBuffer(inputBufferId);
+                    // fill inputBuffer with valid data
+                    inputBuffer.put(audioFrame.array(), audioFrame.pos(), audioFrame.len());
+                    aCodec.queueInputBuffer(inputBufferId, 0, audioFrame.len(), audioFrame.timestamp *1000, 0 );
+                }
             }
         }
 
@@ -489,27 +560,13 @@ public class PWPlayer {
         return (mAudioBuffers.size()<=mAudioLoLimit );
     }
 
-    public boolean writeAudio(MediaFrame input) {
+    public boolean audioInput(MediaFrame input) {
         if( input!=null ) {
-
-            int ilen = input.len();
-            byte [] ia = input.array();
-            int ipos = input.pos() ;
-            int len = mAudioChunkSize ;
-            long ts = input.timestamp ;
-            int tsplus = mAudioChunkSize * 1000 / mAudioRate ;
-
-            while( ilen>0 ) {
-                if( ilen < len )
-                    len = ilen ;
-                if(! mAudioBuffers.offer(new MediaFrame( ia, ipos, len, ts, 0 )) ) {
-                    Log.d("Audio", "Frame lost");
-                }
-                ilen -= len ;
-                ipos += len ;
-                ts += tsplus ;
+            if( mAudioBuffers.remainingCapacity() == 0 ){
+                mAudioBuffers.poll();
+                Log.d("Audio", "Audio frame skipped.");
             }
-
+            mAudioBuffers.offer(input);
             return true ;
         }
         return false ;

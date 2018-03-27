@@ -4,11 +4,16 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.res.Resources;
 import android.media.MediaCodec;
+import android.os.SystemClock;
 import android.util.Log;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileFilter;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -18,6 +23,7 @@ import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.Queue;
 
+import static android.R.attr.text;
 import static java.util.Arrays.*;
 
 /**
@@ -63,6 +69,8 @@ public class PWStream {
     public int video_height ;
     public int video_width ;
 
+    public long active_timeMillis ;
+
     static protected void setheader(byte[] fileheader) {
         ByteBuffer bf = ByteBuffer.wrap(fileheader) ;
         file_tag = bf.getInt(0);
@@ -91,10 +99,18 @@ public class PWStream {
         video_height = 0 ;
         file_encrypted = false ;
         mStarted = false ;
-        resetTimestamp( 0 );
+        refFrameTS = 0 ;
+        frameTS = 0 ;
+        refFramePts = 0 ;
+        active_timeMillis = SystemClock.uptimeMillis();
     }
 
     public void start() {
+        active_timeMillis = SystemClock.uptimeMillis();
+    }
+
+    public boolean isActive() {
+        return (SystemClock.uptimeMillis() - active_timeMillis) < 30000;
     }
 
     public void release() {
@@ -123,7 +139,7 @@ public class PWStream {
 
     protected boolean checkTvsKey( DvrClient connection ) {
         if( connection.isConnected() ) {
-            DvrClient.Ans ans = new DvrClient.Ans();
+            DvrClient.Ans ans;
 
             byte[] tvskey = null ;
 
@@ -131,25 +147,11 @@ public class PWStream {
             if( tvskey!=null ) {
                 // send REQCHECKKEY packet
                 //          REQCHECKKEY, 303
-                connection.sendReq(303, 0, tvskey);
-                connection.recvAns(ans);
+                ans = connection.request(303, 0, tvskey);
                 if( ans.code == 2 ) {       // ANSOK
                     resetheader(tvskey);
                     return true ;
                 }
-            }
-
-            // check tvskey MF5001
-            tvskey = pwvApp.readResFile(R.raw.tvskey_mf5001);
-
-            // send REQCHECKKEY packet
-            //          REQCHECKKEY, 303
-            connection.sendReq(303, 0, tvskey);
-            connection.recvAns(ans);
-            if( ans.code == 2 ) {       // ANSOK
-                pwvApp.saveFile( "tvskey", tvskey );
-                resetheader(tvskey);
-                return true ;
             }
 
             // check tvskey MF5000
@@ -157,12 +159,57 @@ public class PWStream {
 
             // send REQCHECKKEY packet
             //          REQCHECKKEY, 303
-            connection.sendReq(303, 0, tvskey);
-            connection.recvAns(ans);
+            ans = connection.request(303, 0, tvskey);
             if( ans.code == 2 ) {       // ANSOK
                 pwvApp.saveFile( "tvskey", tvskey );
                 resetheader(tvskey);
-                return true;
+                return true ;
+            }
+
+            // check tvskey MF5001
+            tvskey = pwvApp.readResFile(R.raw.tvskey_mf5001);
+
+            // send REQCHECKKEY packet
+            //          REQCHECKKEY, 303
+            ans = connection.request(303, 0, tvskey);
+            if( ans.code == 2 ) {       // ANSOK
+                pwvApp.saveFile( "tvskey", tvskey );
+                resetheader(tvskey);
+                return true ;
+            }
+
+            // check external tvskey
+            File extkey = pwvApp.appCtx.getExternalFilesDir (null );
+            if( extkey.isDirectory() ) {
+                File[] keyfiles = extkey.listFiles(new FileFilter() {
+                    @Override
+                    public boolean accept(File pathname) {
+                        return true;
+                    }
+                });
+                for (File keyfile : keyfiles) {
+                    try {
+                        FileInputStream fi = new FileInputStream(keyfile);
+                        int r = fi.read( tvskey ) ;
+
+                        // send REQCHECKKEY packet
+                        //          REQCHECKKEY, 303
+                        ans = connection.request( 303, 0, tvskey, 0, r );
+                        if (ans.code == 2) {       // ANSOK
+                            pwvApp.saveFile("tvskey", tvskey);
+                            resetheader(tvskey);
+                            return true;
+                        }
+
+                        fi.close();
+
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+                }
             }
 
         }
@@ -173,10 +220,27 @@ public class PWStream {
     protected void resetTimestamp( long Timestamp ) {
         refFrameTS = Timestamp ;
         frameTS = refFrameTS;
-        refFramePts = -1 ;      // to refresh reference PTS
+        refFramePts = 0 ;      // to refresh reference PTS
+    }
+
+    // return frame time stamp in milliseconds
+    protected long timeStamp(ByteBuffer frame) {
+        // get time stamp from video PES packet
+        int pos = frame.position();
+        long pts = ((long)frame.get(pos+9)&0x0e) << 29 ;
+        pts |= (((long)frame.getShort(pos+10))&0x0fffe)<<14 ;
+        pts |= (((long)frame.getShort(pos+12))&0x0fffe)>>1 ;
+        pts /= 90 ;             // convert 90k hz counter to 1k hz
+
+        if (refFramePts == 0 ) {     // renew ref Frame PTS
+            refFramePts = pts;
+        }
+
+        return refFrameTS + (pts - refFramePts);
     }
 
     protected void onReceiveFrame( ByteBuffer frame){
+        active_timeMillis = SystemClock.uptimeMillis();
 
         while( frame.remaining() >=40  ) {
             int pos = frame.position() ;
@@ -238,7 +302,7 @@ public class PWStream {
         mAudioFrameQueue.clear();
         mTextFrameQueue.clear();
         mStarted = false ;
-        resetTimestamp( 0 );
+        // resetTimestamp( 0 );
     }
 
     public synchronized MediaFrame peekVideoFrame(){
@@ -277,21 +341,6 @@ public class PWStream {
         return mTextFrameQueue.poll();
     }
 
-    // return frame time stamp in milliseconds
-    protected long timeStamp(ByteBuffer frame) {
-        // get time stamp from video PES packet
-        int pos = frame.position();
-        long pts = ((long)frame.get(pos+9)&0x0e) << 29 ;
-        pts |= (((long)frame.getShort(pos+10))&0x0fffe)<<14 ;
-        pts |= (((long)frame.getShort(pos+12))&0x0fffe)>>1 ;
-        pts /= 90 ;             // convert 90k hz counter to 1k hz
-
-        if (refFramePts <= 0 ) {     // renew ref Frame PTS
-            refFramePts = pts;
-        }
-
-        return refFrameTS + (pts - refFramePts);
-    }
 
     protected synchronized int onHeader( ByteBuffer frame ) {
         int pos = frame.position() ;
@@ -429,15 +478,7 @@ public class PWStream {
 
         // PES header length
         int pesHeaderLen = ((int)frame.get(pos+8) & 0xff) + 9 ;
-
-        int pesSize = ((int) frame.getShort(pos + 4) )&0x0ffff ;
-        if( pesSize > 0 ) {        // big frame, use len as frame size
-            pesSize+=6 ;
-        }
-        else if( pesHeaderLen>18 ) {
-            // large PES packet size
-            pesSize = frame.getInt(pos + 15) + pesHeaderLen;
-        }
+        int pesSize = 6 + (((int) frame.getShort(pos + 4) )&0x0ffff) ;
 
         if( pesSize > frame.remaining() || pesSize<pesHeaderLen ) {
             frame.position(frame.limit());      // invalidate frame buffer

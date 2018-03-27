@@ -2,7 +2,7 @@
 <resources>
 
     <string name="app_name">pwv</string>
-    <string name="app_label">PW Controler</string>
+    <string name="app_label">PW Controller</string>
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
     <string name="action_checkupdate">Check For Updates</string>
@@ -46,7 +46,7 @@
 
     <string name="tag_priority_title">Priority</string>
     <string-array name="tag_priority_entries">
-        <item>Routine</item>
+        <item>Non-Critical</item>
         <item>Critical</item>
     </string-array>
 

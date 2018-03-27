@@ -29,134 +29,105 @@ import java.util.Queue;
 public class PWLiveStream extends PWStream {
 
     public String hashId ;
-
-    boolean mRunning = false ;
-    Thread mThread ;
+    private Thread mThread ;
 
     public PWLiveStream( int channel ) {
         super(channel);
     }
 
-    @Override
-    public void start() {
-        mRunning = true ;
-        mMaxQueue = 50 ;
-        mThread = new Thread( new Runnable(){
-            @Override
-            public void run() {
-                LiveThread();
-            }
-        });
-        mThread.start();
-    }
+    class PWLiveThread extends Thread {
+        boolean mRunning  ;
 
-    @Override
-    public void release() {
-        super.release();
-        mRunning = false ;
-        if( mThread!=null && mThread.isAlive()) {
-            mThread.interrupt();
-        }
-        mThread = null ;
-    }
+        public void run() {
+            mRunning = true ;
 
-    @Override
-    public boolean isRunning() { return mRunning; }
+            DvrClient dvrClient = new DvrClient();
 
-    private void LiveThread() {
-        DvrClient dvrClient = new DvrClient();
-
-        while (mRunning) {
-            if( !dvrClient.connect() ) {
-                try {
-                    Thread.sleep(10000);
-                }
-                catch (InterruptedException e){
-                    mRunning=false ;
-                }
-                continue;
-            }
-            else {
-                try {
-                    byte[] buffer = null ;
-                    DvrClient.Ans ans = new DvrClient.Ans();
-
-                    MessageDigest digester ;
+            while (mRunning && !isInterrupted() ) {
+                if( !dvrClient.connect() ) {
                     try {
-                        digester = MessageDigest.getInstance("MD5");
-                    } catch (NoSuchAlgorithmException e) {
-                        e.printStackTrace();
-                        digester = null ;
+                        Thread.sleep(10000);
                     }
+                    catch (InterruptedException e){
+                        mRunning=false ;
+                    }
+                    continue;
+                }
+                else {
+                    try {
+                        DvrClient.Ans ans ;
 
-                    // verify tvs key
-                    checkTvsKey(dvrClient);
+                        MessageDigest digester ;
+                        try {
+                            digester = MessageDigest.getInstance("MD5");
+                        } catch (NoSuchAlgorithmException e) {
+                            e.printStackTrace();
+                            digester = null ;
+                        }
 
-                    // get Channel setup
-                    // struct  DvrChannel_attr {
-                    //  int         Enable ;
-                    //  char        CameraName[64] ;
-                    //  int         Resolution;	// 0: CIF, 1: 2CIF, 2:DCIF, 3:4CIF, 4:QCIF
-                    //    ...
-                    // }
-                    //
-                    //  send REQGETCHANNELSETUP
-                    dvrClient.sendReq(14,mChannel,0);
-                    if( dvrClient.recvAns(ans) && ans.size>0 && ans.code == 11 ) {
-                        buffer = dvrClient.recv(ans.size);
-                        if( buffer!=null ) {
-                            ByteBuffer bb = ByteBuffer.wrap(buffer);
+                        // verify tvs key
+                        checkTvsKey(dvrClient);
+
+                        // get Channel setup
+                        // struct  DvrChannel_attr {
+                        //  int         Enable ;
+                        //  char        CameraName[64] ;
+                        //  int         Resolution;	// 0: CIF, 1: 2CIF, 2:DCIF, 3:4CIF, 4:QCIF
+                        //    ...
+                        // }
+                        //
+                        //  send REQGETCHANNELSETUP
+                        ans = dvrClient.request(14,mChannel);
+                        if( ans.databuf!=null && ans.code == 11 ) {
+                            ByteBuffer bb = ByteBuffer.wrap(ans.databuf);
                             bb.order(ByteOrder.LITTLE_ENDIAN);
                             if( bb.getInt(0)!=0 )
                                 mRes = bb.getInt( 68 ) ;
                             if( digester != null )
-                                digester.update(buffer);
+                                digester.update(ans.databuf);
                         }
-                    }
 
-                    // get Channel Info
-                    //struct channel_info {
-                    //    int Enable ;
-                    //    int Resolution ;
-                    //    char CameraName[64] ;
-                    //} ;
-                    //  send REQCHANNELINFO
-                    dvrClient.sendReq(4,0,0);
-                    if( dvrClient.recvAns(ans) && ans.size>0 && ans.code == 7 ) {
-                        buffer = dvrClient.recv(ans.size);
-                        totalChannels = ans.data;
-                        if( totalChannels>0 ) {
-                            if( digester != null )
-                                digester.update(buffer);
-                            mChannelNames = new String [totalChannels];
-                            synchronized (this) {
-                                for (int i = 0; i < totalChannels; i++) {
-                                    mChannelNames[i] = new String(buffer, 72 * i + 8, 64, "UTF-8").split("\0")[0];
+                        totalChannels = 8 ;     // default to 8 channels ^^
+                        // get Channel Info
+                        //struct channel_info {
+                        //    int Enable ;
+                        //    int Resolution ;
+                        //    char CameraName[64] ;
+                        //} ;
+                        //  send REQCHANNELINFO
+                        ans = dvrClient.request(4);
+                        if( ans.code == 7 ) {
+                            totalChannels = ans.data;
+                            if (ans.databuf != null) {
+                                if (digester != null)
+                                    digester.update(ans.databuf);
+                                mChannelNames = new String[totalChannels];
+                                synchronized (this) {
+                                    for (int i = 0; i < totalChannels; i++) {
+                                        mChannelNames[i] = new String(ans.databuf, 72 * i + 8, 64, "UTF-8").split("\0")[0];
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if( mRes<0 || mChannel<0 || mChannel>=totalChannels ) {
-                        // failed on such channel
-                        mRunning=false ;
-                        continue ;
-                    }
-
-                    hashId = "C"+mChannel+"." ;
-                    if( digester!= null ) {
-                        byte[] dg = digester.digest();
-                        for ( int j = 0; j < dg.length; j++ ) {
-                            hashId += String.format("%02x", dg[j]);
+                        if( mRes<0 || mChannel<0 || mChannel>=totalChannels ) {
+                            // failed on such channel
+                            mRunning=false ;
+                            continue ;
                         }
-                    }
 
-                    // REQ2GETLOCALTIME
-                    dvrClient.sendReq(218, 0, 0);
-                    if( dvrClient.recvAns(ans) && ans.size>0 ) {
-                        buffer = dvrClient.recv(ans.size);
-                        if( ans.code == 211 && ans.size>=28 ) {         // ANS2TIME
-                            ByteBuffer bb = ByteBuffer.wrap(buffer);
+                        hashId = "C"+mChannel+"." ;
+                        if( digester!= null ) {
+                            byte[] dg = digester.digest();
+                            for ( int j = 0; j < dg.length; j++ ) {
+                                hashId += String.format("%02x", dg[j]);
+                            }
+                        }
+
+                        // REQ2GETLOCALTIME
+                        ans = dvrClient.request(218);
+                        if( ans.code == 211 && ans.databuf!=null && ans.databuf.length>=28 ) {         // ANS2TIME
+                            ByteBuffer bb = ByteBuffer.wrap(ans.databuf);
                             bb.order(ByteOrder.LITTLE_ENDIAN);
 
                             // response contain header of structure dvrtime
@@ -170,48 +141,72 @@ public class PWLiveStream extends PWStream {
                             );
                             resetTimestamp( cal.getTimeInMillis() + bb.getInt(24) ) ;
                         }
-                    }
 
-                    // send REQOPENLIVE packet
-                    // struct dvr_req {
-                    //      int reqcode;
-                    //      int data;
-                    //      int reqsize;
-                    //  };
-                    //  send REQOPENLIVE
-                    dvrClient.sendReq(215,mChannel,0);
+                        // send REQOPENLIVE packet
+                        // struct dvr_req {
+                        //      int reqcode;
+                        //      int data;
+                        //      int reqsize;
+                        //  };
+                        //  send REQOPENLIVE
+                        ans = dvrClient.request(215,mChannel);
 
-                    while (mRunning && dvrClient.isConnected()) {
-                        // read dvr ans header
-                        if ( mRunning && dvrClient.recvAns(ans) && ans.size >= 0 && ans.code > 0 && ans.code < 500) {
-                            if( ans.size > 0  ) {
-                                buffer = dvrClient.recv(ans.size);
-                                if (buffer != null) {
-                                    if( ans.code == 202 ) {                           // ANSSTREAMDATA
-                                        if( ans.data == 10 && ans.size == 40 ) {      // FRAMETYPE_264FILEHEADER
-                                            setheader(buffer);
-                                            onHeader( ByteBuffer.wrap(buffer) );
-                                        }
-                                        else {
-                                            onReceiveFrame(ByteBuffer.wrap(buffer));
-                                        }
+                        if( ans.code == 201 )
+                            while (mRunning && dvrClient.isConnected() && !isInterrupted()) {
+                                // read dvr ans header
+                                ans = dvrClient.recvAns();
+                                if( ans.code == 202 ) {                           // ANSSTREAMDATA
+                                    if( ans.data == 10 && ans.size == 40 ) {      // FRAMETYPE_264FILEHEADER
+                                        setheader(ans.databuf);
+                                        onHeader( ByteBuffer.wrap(ans.databuf) );
+                                    }
+                                    else {
+                                        onReceiveFrame(ByteBuffer.wrap(ans.databuf));
                                     }
                                 }
+                                else {                // ANSSTREAMOPEN
+                                    break;
+                                }
                             }
-                        }
-                        else {
-                            break;
-                        }
+
+                        dvrClient.close();
+
+                    } catch (IOException e) {
+                        mRunning = false ;
                     }
-
-                    dvrClient.close();
-
-                } catch (IOException e) {
-                    mRunning = false ;
                 }
             }
+            dvrClient.close();
         }
-        dvrClient.close();
+
+        @Override
+        public void interrupt() {
+            mRunning = false ;
+            super.interrupt();
+        }
     }
+
+    @Override
+    public void start() {
+        super.start();
+        mMaxQueue = 50 ;
+        mThread = new PWLiveThread();
+        mThread.start();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return mThread!=null && mThread.isAlive() ;
+    }
+
+    @Override
+    public void release() {
+        super.release();
+        if( isRunning() ) {
+            mThread.interrupt();
+        }
+        mThread = null ;
+    }
+
 
 }

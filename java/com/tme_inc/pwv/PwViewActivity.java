@@ -4,11 +4,15 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.TimeAnimator;
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.SurfaceTexture;
+import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -51,6 +55,9 @@ public class PwViewActivity extends Activity {
     protected int   m_channel ;
     protected int   m_totalChannel ;
 
+    // network connecting mode
+    protected int   m_connMode ;
+
     protected ViewGroup m_screen ;
 
     protected static final int m_maxosd = 16 ;
@@ -64,12 +71,27 @@ public class PwViewActivity extends Activity {
     protected TimeAnimator mTimeAnimator = null;
     protected Handler m_UIhandler ;
 
+    protected int savedScreenTimeout = 0 ;
+
+    protected BroadcastReceiver mRecvPowerDisconnect = new BroadcastReceiver(){
+        @Override
+        public void onReceive(Context context, Intent intent) {
+           finish();
+        }
+    };
 
     // Generic screen initialization
     // called in onCreate(), after setContentView
     protected void setupScreen() {
 
         int i;
+
+        SharedPreferences prefs = getSharedPreferences("pwv", 0);
+        m_connMode = prefs.getInt("connMode", DvrClient.CONN_DIRECT );
+
+        if( m_connMode == DvrClient.CONN_USB )
+            registerReceiver(mRecvPowerDisconnect, new IntentFilter(Intent.ACTION_POWER_DISCONNECTED));
+
         m_screen = (ViewGroup) findViewById(R.id.layoutscreen);
 
         Configuration configuration =  getResources().getConfiguration();
@@ -324,7 +346,6 @@ public class PwViewActivity extends Activity {
         }
     }
 
-    protected int savedScreenTimeout = 0 ;
     protected  int getSreenTimeout( ) {
         try {
             return Settings.System.getInt( getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT );
@@ -382,6 +403,9 @@ public class PwViewActivity extends Activity {
     }
 
     protected void onAnimate( long totalTime, long deltaTime) {
+        if( m_connMode == DvrClient.CONN_USB && mstream!=null && !mstream.isActive()) {
+            finish();
+        }
     }
 
     @Override
@@ -389,12 +413,13 @@ public class PwViewActivity extends Activity {
         super.onResume();
 
         savedScreenTimeout = getSreenTimeout();
-        if( savedScreenTimeout <= 0 ) {
-            savedScreenTimeout = 60000 ;
+        if (savedScreenTimeout <= 0) {
+            savedScreenTimeout = 60000;
         }
-        if( savedScreenTimeout>1800000 ) {
-            savedScreenTimeout=1800000 ;
+        if (savedScreenTimeout > 1800000) {
+            savedScreenTimeout = 1800000;
         }
+        setSreenTimeout(15000);
 
         // force turn on screen keep on
         m_keepon = false ;
@@ -423,9 +448,7 @@ public class PwViewActivity extends Activity {
         stopMedia();
         mPwProtocol.cancel();
 
-        if( savedScreenTimeout > 0 ) {
-            setSreenTimeout(savedScreenTimeout);
-        }
+       setSreenTimeout(savedScreenTimeout);
     }
 
     @Override

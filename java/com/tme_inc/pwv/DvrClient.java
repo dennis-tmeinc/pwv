@@ -1,74 +1,61 @@
-package com.tme_inc.pwv;
-
-import android.app.Activity;
-import android.content.Context;
-import android.content.SharedPreferences;
-import android.provider.Settings;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.SocketException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-
 /**
  * DvrClient
  *      DVR protocol, communication with DVR
  * Created by dennis on 12/23/14.
+ * 01/18/17, add retry on request()
  */
+
+package com.tme_inc.pwv;
+
+import android.content.SharedPreferences;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+
 public class DvrClient extends PwvSocket {
 
     // Connect mode constance
     public static final int CONN_DIRECT   =  0 ;
     public static final int CONN_REMOTE   =  1 ;
     public static final int CONN_USB      =  2 ;
-    private int connectMode ;
 
     static public class Ans {
-        public int code ;
-        public int data ;
-        public int size ;
-
-        protected byte [] toByteArray() {
-            byte [] ba = new byte [12] ;
-            ByteBuffer bb = ByteBuffer.wrap(ba);
-            bb.order(ByteOrder.LITTLE_ENDIAN);
-            bb.putInt(code);
-            bb.putInt(data);
-            bb.putInt(size);
-            return ba ;
-        }
-
-        protected void fromByteArray( byte [] buffer ) {
-            if( buffer != null ) {
-                ByteBuffer bb = ByteBuffer.wrap(buffer);
-                bb.order(ByteOrder.LITTLE_ENDIAN);
-                code = bb.getInt();
-                data = bb.getInt();
-                size = bb.getInt();
-            }
-            else {
-                code = 0 ;
-                data = 0 ;
-                size = 0 ;
-            }
-        }
+        public int code = 0;
+        public int data = 0;
+        public int size = 0;
+        public byte [] databuf = null ;
     }
 
     static public class Req extends Ans {
-        public Req( int c, int d, int s ){
+
+        public int offset = 0 ;
+
+        public Req ( int c, int d, byte [] dbuf, int o, int s ){
             code = c ;
             data = d ;
-            size = s ;
+            databuf = dbuf ;
+            if( databuf!=null ) {
+                offset = o ;
+                size = s ;
+            }
+        }
+
+        public Req ( int c, int d, byte [] dbuf ){
+            this(c,d,dbuf,0,dbuf.length) ;
+        }
+
+        public Req ( int c, int d ){
+            this(c,d,null,0,0);
+        }
+
+        public Req ( int c ){
+            this(c,0,null,0,0);
         }
     }
 
-
+    protected int connectMode ;
+    protected String mHost;
     protected int mPort;
-    private String mHost;
 
     // remote login connections
     protected String loginServer;
@@ -166,47 +153,84 @@ public class DvrClient extends PwvSocket {
         mId = prefs.getString("aid", "android");          // my device id
     }
 
-    public boolean sendReq( Req req )
+    protected boolean sendReq( Req req )
     {
-        return send(req.toByteArray())>0 ;
-    }
-
-    public boolean sendReq( int reqcode, int data, int reqsize )
-    {
-        return sendReq(new Req(reqcode, data, reqsize));
-    }
-
-    public boolean sendReq( int reqcode, int data, byte[] dataarray )
-    {
-        int leng ;
-        if( dataarray!=null )
-            leng = dataarray.length ;
-        else
-            leng = 0 ;
-        sendReq( reqcode, data, leng );
-        if( leng>0 ) {
-            send(dataarray, 0, leng);
+        if( connect() ) {
+            byte [] ba = new byte [12] ;
+            ByteBuffer bb = ByteBuffer.wrap(ba);
+            bb.order(ByteOrder.LITTLE_ENDIAN);
+            bb.putInt(req.code);
+            bb.putInt(req.data);
+            bb.putInt(req.size);
+            if( send( ba ) > 0 ) {
+                if (req.size > 0 && req.databuf != null ) {
+                    if (send(req.databuf, req.offset, req.size) > 0) {
+                        return true;
+                    }
+                }
+                else {
+                    return true;
+                }
+            }
         }
-        return true ;
-    }
-
-    public boolean recvAns(Ans ans) {
-        if( ans != null ) {
-            ans.fromByteArray(recv(12));
-            return true ;
-        }
-        else {
-            return false ;
-        }
+        close();
+        return false ;
     }
 
     public Ans recvAns() {
-        Ans a = new Ans();
-        if (recvAns(a)) {
-            return a;
-        } else {
-            return null;
+        Ans ans = new Ans();
+        byte[] r = recv(12);
+        if (r != null) {
+            ByteBuffer bb = ByteBuffer.wrap(r);
+            bb.order(ByteOrder.LITTLE_ENDIAN);
+            ans.code = bb.getInt();
+            ans.data = bb.getInt();
+            ans.size = bb.getInt();
+
+            if (ans.code > 0 && ans.size > 0 && ans.size < 10000000) {
+                ans.databuf = recv(ans.size);
+            }
+        }
+        return ans;
+    }
+
+    public Ans request( Req req )
+    {
+        int retry ;
+        for( retry =0 ; retry<3 ; retry++ ) {
+            if( sendReq( req ) ) {
+                Ans ans = recvAns() ;
+                if( ans.code>0 ) {
+                    return ans ;
+                }
+            }
+            close();
+        }
+        return new Ans() ;      // empty ans (error)
+    }
+
+    public Ans request( int reqcode, int reqdata, byte[] dataarray, int offset,  int reqsize )
+    {
+       return request( new Req(reqcode, reqdata, dataarray, offset, reqsize) );
+    }
+
+    public Ans request( int reqcode, int reqdata, byte[] dataarray )
+    {
+        if( dataarray == null ) {
+            return request( new Req(reqcode, reqdata) );
+        }
+        else {
+            return request( new Req(reqcode, reqdata, dataarray) );
         }
     }
 
+    public Ans request( int reqcode, int reqdata )
+    {
+        return request( new Req(reqcode, reqdata) );
+    }
+
+    public Ans request( int reqcode )
+    {
+        return request( new Req(reqcode) );
+    }
 }
