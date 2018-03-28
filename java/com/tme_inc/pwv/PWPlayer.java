@@ -55,6 +55,7 @@ public class PWPlayer {
     Thread mAudioThread;
     // keep track of audio frame timestamp
     volatile long audioTimestamp ;
+    volatile long audioTsRef ;
 
     private Context mContext ;
     private Surface mSurf ;
@@ -443,8 +444,8 @@ public class PWPlayer {
                 int alen = audioFrame.len();
                 short[] audioBuffer = new short [alen] ;
 
-                int adj = 0 ;
                 // audio sync hack for live view
+                int adj = 0 ;
                 if( m_livemode && mAudioBuffers.size() > 0) {
                     adj = 1 ;
                 }
@@ -456,6 +457,7 @@ public class PWPlayer {
                 }
                 audioTrack.write(audioBuffer, 0, alen-adj);
                 audioTimestamp = audioFrame.timestamp ;
+                audioTsRef = SystemClock.uptimeMillis();
             }
         }
 
@@ -510,11 +512,16 @@ public class PWPlayer {
             int outputBufferId = aCodec.dequeueOutputBuffer(bufferInfo, 100000);
             if (outputBufferId >= 0) {
 
-                audioTimestamp = bufferInfo.presentationTimeUs / 1000 ;
+                // audio sync hack for live view
+                int adj = 0 ;
+                if( m_livemode && mAudioBuffers.size() > 0) {
+                    adj = 2 ;
+                }
 
                 ByteBuffer outputBuffer = aCodec.getOutputBuffer(outputBufferId);
                 //MediaFormat format = aCodec.getOutputFormat(outputBufferId);
 
+                /*
                 ShortBuffer samples = outputBuffer.order(ByteOrder.nativeOrder()).asShortBuffer();
                 int alen = samples.remaining() ;
                 short[] res = new short[alen];
@@ -522,7 +529,14 @@ public class PWPlayer {
                     res[i] = samples.get(i);
                 }
                 audioTrack.write(res, 0, alen);
+                */
+
+
+                audioTrack.write(outputBuffer,outputBuffer.remaining()-adj,audioTrack.WRITE_BLOCKING);
                 aCodec.releaseOutputBuffer(outputBufferId, false);
+
+                audioTimestamp = bufferInfo.presentationTimeUs / 1000 ;
+                audioTsRef = SystemClock.uptimeMillis();
             }
 
             MediaFrame audioFrame = null;
@@ -549,10 +563,13 @@ public class PWPlayer {
     }
 
     public long getAudioTimestamp() {
-        return audioTimestamp ;
+        if( audioTimestamp == 0 )
+            return 0;
+        return audioTimestamp  + (SystemClock.uptimeMillis() - audioTsRef);
     }
 
     public void resetAudioTimestamp() {
+        audioTsRef = SystemClock.uptimeMillis() ;
         audioTimestamp = 0;
     }
 
@@ -563,7 +580,7 @@ public class PWPlayer {
     public boolean audioInput(MediaFrame input) {
         if( input!=null ) {
             if( mAudioBuffers.remainingCapacity() == 0 ){
-                mAudioBuffers.poll();
+                mAudioBuffers.clear();
                 Log.d("Audio", "Audio frame skipped.");
             }
             mAudioBuffers.offer(input);
