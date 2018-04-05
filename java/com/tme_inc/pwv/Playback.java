@@ -354,12 +354,12 @@ public class Playback extends PwViewActivity {
                         //mplayer = PWPlayer.CreatePlayer(this, new Surface(surface), mstream.mRes );
                         mplayer = new PWPlayer(this, new Surface(surface), false);
                         mplayer.setFormat(mstream.getResolution());
-                        if( mstream.video_width > 50 && mstream.video_height>50 ) {
-                            mplayer.setFormat( mstream.video_width, mstream.video_height ) ;
+                        if( mstream.getVideo_width() > 50 && mstream.getVideo_height() >50 ) {
+                            mplayer.setFormat(mstream.getVideo_width(), mstream.getVideo_height()) ;
                         }
-                        mplayer.setAudioFormat( mstream.audio_codec, mstream.audio_samplerate ) ;
+                        mplayer.setAudioFormat(mstream.getAudio_codec(), mstream.getAudio_samplerate()) ;
                         mplayer.start();
-                        m_totalChannel = mstream.totalChannels ;
+                        m_totalChannel = mstream.getTotalChannels();
 
                         m_playSpeed = 1000 ;    // 1000 : normal speed, 0: paused, 1: one frame forward than paused
                         refTime = 0 ;
@@ -388,7 +388,7 @@ public class Playback extends PwViewActivity {
             frame = mstream.peekVideoFrame();
             if( frame != null ) {
                 // reset reference timers
-                refFrameTime = frame.timestamp ;
+                refFrameTime = frame.getTimestamp();
                 refTime = totalTime;
                 mplayer.resetAudioTimestamp() ;
                 forceOSD = true ;
@@ -414,7 +414,7 @@ public class Playback extends PwViewActivity {
         if( frame!=null && mplayer.videoInputReady() ) {
             mstream.getVideoFrame();
             // fast play, only output key frames
-            if(m_playSpeed<=4000 || frame.flags != 0) {
+            if(m_playSpeed<=4000 || frame.getFlags() != 0) {
                 mplayer.videoInput(frame);
             }
         }
@@ -423,12 +423,12 @@ public class Playback extends PwViewActivity {
         frame = mstream.peekAudioFrame() ;
         if( frame!=null && mplayer.audioReady() ) {
             if( m_playSpeed == 1000 ) {
-                if( (frame.timestamp-playFrameTime)<2000 ){
+                if( (frame.getTimestamp() -playFrameTime)<2000 ){
                     mstream.getAudioFrame();
                     mplayer.audioInput(frame);
                 }
             }
-            else if( frame.timestamp < playFrameTime ) {
+            else if( frame.getTimestamp() < playFrameTime ) {
                 mstream.getAudioFrame();
                 mplayer.resetAudioTimestamp() ;
             }
@@ -437,7 +437,7 @@ public class Playback extends PwViewActivity {
         // Output text frame
         frame = mstream.peekTextFrame();
         if( frame!=null ) {
-            long difft = frame.timestamp - playFrameTime ;
+            long difft = frame.getTimestamp() - playFrameTime ;
             if( difft<-3000 ) {
                 // get and discard older text
                 mstream.getTextFrame();

@@ -221,7 +221,7 @@ public class PWDecoder {
     }
 
     public boolean writeInput(MediaFrame input) {
-        int len = input.len();
+        int len = input.len;
         if ( inputReady() && input!=null && len > 0 ) {
             ByteBuffer buffer = mInputBuffers[mAvailableInputBuffer];
 
@@ -231,12 +231,12 @@ public class PWDecoder {
             }
 
             buffer.clear();
-            buffer.put(input.array(), input.pos(), len);
+            buffer.put(input.array, input.pos, len);
             buffer.flip ();
 
             // Submit the buffer to the codec for decoding. The presentationTimeUs
             // indicates the position (play time) for the current sample.
-            mDecoder.queueInputBuffer(mAvailableInputBuffer, 0, len, input.timestamp, input.flags);
+            mDecoder.queueInputBuffer(mAvailableInputBuffer, 0, len, input.getTimestamp(), input.getFlags());
             mAvailableInputBuffer=-1 ;
 
             return true ;
@@ -308,7 +308,7 @@ public class PWDecoder {
             MediaFrame audioFrame = mAudioBuffers.poll();
             if (audioFrame!=null) {
                 if( mAudioTrack.getState() == AudioTrack.STATE_INITIALIZED && mAudioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING ) {
-                    int size = audioFrame.len();
+                    int size = audioFrame.len;
                     short[] buffer = new short[size];
                     for (int i = 0; i < size; i++) {
                         buffer[i] = uLaw_decode(audioFrame.get(i));

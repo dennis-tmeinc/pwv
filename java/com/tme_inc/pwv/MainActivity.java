@@ -73,7 +73,7 @@ public class MainActivity extends Activity {
                 WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
 
         m_dvrIp = "192.168.1.100" ;
-        m_connectMode = DvrClient.CONN_USB ;
+        m_connectMode = DvrClient.Companion.getCONN_USB();
 
         ListView listView = (ListView)findViewById( R.id.devicelist ) ;
         listView.setAdapter(new ArrayAdapter(this,
@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
                 //Intent intent = new Intent(getBaseContext(), Playback.class);
                 //intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 //startActivity(intent);
-                m_connectMode = DvrClient.CONN_USB ;
+                m_connectMode = DvrClient.Companion.getCONN_USB();
                 updateDeviceList(true);
 
             }
@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
                 //Intent intent = new Intent(getBaseContext(), Liveview.class);
                 //intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 //startActivity(intent);
-                m_connectMode = DvrClient.CONN_DIRECT ;
+                m_connectMode = DvrClient.Companion.getCONN_DIRECT();
                 updateDeviceList(true);
             }
         });
@@ -116,12 +116,12 @@ public class MainActivity extends Activity {
         button.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if( m_connectMode == DvrClient.CONN_REMOTE ) {
+                if( m_connectMode == DvrClient.Companion.getCONN_REMOTE()) {
                     Intent intent = new Intent(getBaseContext(), LoginActivity.class);
                     startActivity(intent);
                 }
                 else {
-                    m_connectMode = DvrClient.CONN_REMOTE ;
+                    m_connectMode = DvrClient.Companion.getCONN_REMOTE();
                     updateDeviceList(true);
                 }
             }
@@ -275,7 +275,7 @@ public class MainActivity extends Activity {
                 WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
 
         SharedPreferences prefs = getSharedPreferences("pwv", 0);
-        m_connectMode = prefs.getInt("connMode", DvrClient.CONN_DIRECT );
+        m_connectMode = prefs.getInt("connMode", DvrClient.Companion.getCONN_DIRECT());
         m_dvrIp = prefs.getString("dvrIp", "192.168.1.100");
 
         if( m_pwProtocol == null ) {
@@ -363,7 +363,7 @@ public class MainActivity extends Activity {
         SharedPreferences.Editor prefEdit = pref.edit();
 
         String id = m_DeviceIdList.get(which);
-        if( m_connectMode == DvrClient.CONN_DIRECT ) {
+        if( m_connectMode == DvrClient.Companion.getCONN_DIRECT()) {
             prefEdit.putString("deviceIp", id);
         }
         else {
@@ -405,7 +405,7 @@ public class MainActivity extends Activity {
 
         findViewById( R.id.devicelist ).invalidate();
 
-        if( ndevs == 1 && m_connectMode == DvrClient.CONN_USB ) {
+        if( ndevs == 1 && m_connectMode == DvrClient.Companion.getCONN_USB()) {
             onSelectDevice(0) ;
         }
 
@@ -415,11 +415,11 @@ public class MainActivity extends Activity {
     {
         int color1 , color2, color3 ;
         color1=color2=color3=R.color.button_main ;
-        if( m_connectMode == DvrClient.CONN_USB ) {
+        if( m_connectMode == DvrClient.Companion.getCONN_USB()) {
             color1 = R.color.button_selected ;
             detectString="USB" ;
         }
-        else if( m_connectMode == DvrClient.CONN_REMOTE ) {
+        else if( m_connectMode == DvrClient.Companion.getCONN_REMOTE()) {
             color2 =R.color.button_selected ;
             detectString="Internet" ;
         }
@@ -484,7 +484,7 @@ public class MainActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences("pwv", 0);
 
         String user ;
-        if( m_connectMode == DvrClient.CONN_USB ) {
+        if( m_connectMode == DvrClient.Companion.getCONN_USB()) {
             user = "usb" ;
         }
         else {
@@ -571,7 +571,7 @@ public class MainActivity extends Activity {
             return ;
         }
 
-        if (m_connectMode == DvrClient.CONN_DIRECT ) {
+        if (m_connectMode == DvrClient.Companion.getCONN_DIRECT()) {
             updateLocalDevice();
         } else {
             updateRemoteDevice();

@@ -24,7 +24,7 @@ public class LoginActivity extends Activity {
         SharedPreferences pref = getSharedPreferences("pwv", 0);
         SharedPreferences.Editor prefEdit = pref.edit();
 
-        prefEdit.putInt("connMode", DvrClient.CONN_REMOTE );     // to use remote login
+        prefEdit.putInt("connMode", DvrClient.Companion.getCONN_REMOTE());     // to use remote login
         prefEdit.putString("loginSession", m_sessionId);
         prefEdit.putString("loginTargetId", m_DeviceId[which]);
         prefEdit.commit();

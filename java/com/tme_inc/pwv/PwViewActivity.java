@@ -87,9 +87,9 @@ public class PwViewActivity extends Activity {
         int i;
 
         SharedPreferences prefs = getSharedPreferences("pwv", 0);
-        m_connMode = prefs.getInt("connMode", DvrClient.CONN_DIRECT );
+        m_connMode = prefs.getInt("connMode", DvrClient.Companion.getCONN_DIRECT());
 
-        if( m_connMode == DvrClient.CONN_USB )
+        if( m_connMode == DvrClient.Companion.getCONN_USB())
             registerReceiver(mRecvPowerDisconnect, new IntentFilter(Intent.ACTION_POWER_DISCONNECTED));
 
         m_screen = (ViewGroup) findViewById(R.id.layoutscreen);
@@ -380,7 +380,7 @@ public class PwViewActivity extends Activity {
 
     protected void goPrevChannel() {
         if( mstream != null ) {
-            m_totalChannel = mstream.totalChannels ;
+            m_totalChannel = mstream.getTotalChannels();
         }
         if( m_totalChannel<1 ) m_totalChannel = 1 ;
         m_channel--;
@@ -392,7 +392,7 @@ public class PwViewActivity extends Activity {
 
     protected void goNextChannel() {
         if( mstream != null ) {
-            m_totalChannel = mstream.totalChannels ;
+            m_totalChannel = mstream.getTotalChannels();
         }
         if( m_totalChannel<1 ) m_totalChannel = 1 ;
         m_channel++;
@@ -403,7 +403,7 @@ public class PwViewActivity extends Activity {
     }
 
     protected void onAnimate( long totalTime, long deltaTime) {
-        if( m_connMode == DvrClient.CONN_USB && mstream!=null && !mstream.isActive()) {
+        if( m_connMode == DvrClient.Companion.getCONN_USB() && mstream!=null && !mstream.isActive()) {
             finish();
         }
     }
@@ -476,9 +476,9 @@ public class PwViewActivity extends Activity {
         if( txtFrame == null )
             return ;
 
-        byte [] frame = txtFrame.array();
-        int text_off = txtFrame.pos() ;
-        int text_len = text_off+txtFrame.len();
+        byte [] frame = txtFrame.array;
+        int text_off = txtFrame.pos ;
+        int text_len = text_off+txtFrame.len;
 
         for(int idx=0;
             idx<m_maxosd &&

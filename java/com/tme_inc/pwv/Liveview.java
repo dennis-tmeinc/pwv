@@ -241,7 +241,7 @@ public class Liveview extends PwViewActivity {
             if( cn!=null )
                 ((TextView)findViewById(R.id.loadingText)).setText( cn );
             if( mstream.videoAvailable() ) {
-                m_totalChannel = mstream.totalChannels ;
+                m_totalChannel = mstream.getTotalChannels();
                 //startActivity(new Intent(getBaseContext(), Playback.class));
                 TextureView textureView = (TextureView)findViewById(R.id.liveScreen);
                 if( textureView!=null && textureView.isAvailable()) {
@@ -249,13 +249,13 @@ public class Liveview extends PwViewActivity {
                     if (surface != null && mstream.getResolution()>=0 ) {
                         //mplayer = PWPlayer.CreatePlayer(this, new Surface(surface), mstream.mRes );
                         mplayer = new PWPlayer( this, new Surface(surface), true );
-                        if( mstream.video_width > 50 && mstream.video_height>50 ) {
-                            mplayer.setFormat( mstream.video_width, mstream.video_height ) ;
+                        if( mstream.getVideo_width() > 50 && mstream.getVideo_height() >50 ) {
+                            mplayer.setFormat(mstream.getVideo_width(), mstream.getVideo_height()) ;
                         }
                         else {
                             mplayer.setFormat( mstream.getResolution() ) ;
                         }
-                        mplayer.setAudioFormat( mstream.audio_codec, mstream.audio_samplerate ) ;
+                        mplayer.setAudioFormat(mstream.getAudio_codec(), mstream.getAudio_samplerate()) ;
                         mplayer.start();
                     }
                 }
@@ -291,7 +291,7 @@ public class Liveview extends PwViewActivity {
                 MediaFrame txtFrame = null ;
                 while( mstream.textAvailable()){
                     txtFrame = mstream.getTextFrame() ;
-                    if( txtFrame.timestamp >=vts ) {
+                    if( txtFrame.getTimestamp() >=vts ) {
                         break ;
                     }
                 }

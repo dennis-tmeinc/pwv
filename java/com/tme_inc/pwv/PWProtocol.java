@@ -106,9 +106,9 @@ public class PWProtocol extends DvrClient {
             ans = request( 302, 1004 );
             // ANS:
             // ANSGETDATA   (302)
-            if( ans.code==302 && ans.size>0 ) {
-                if( ans.databuf != null ) {
-                    String vrisize = new String(ans.databuf, 0, ans.size).split("\0")[0];
+            if( ans.getCode() ==302 && ans.getSize() >0 ) {
+                if( ans.getDatabuf() != null ) {
+                    String vrisize = new String(ans.getDatabuf(), 0, ans.getSize()).split("\0")[0];
                     String vris[] = vrisize.split(",");
                     if( vris.length>0 ) {
                         vri_s = Integer.parseInt(vris[0]);
@@ -127,11 +127,11 @@ public class PWProtocol extends DvrClient {
             ans = request( 302, 1005 );
             // ANS:
             // ANSGETDATA   (302)
-            if( ans.code==302 && ans.size>=vri_rsize ) {
-                if (ans.databuf != null) {
-                    vri_s = ans.size / vri_rsize;
+            if( ans.getCode() ==302 && ans.getSize() >=vri_rsize ) {
+                if (ans.getDatabuf() != null) {
+                    vri_s = ans.getSize() / vri_rsize;
                     result.putInt("VriListSize", vri_s);
-                    result.putByteArray("VriList", ans.databuf);
+                    result.putByteArray("VriList", ans.getDatabuf());
                 }
             }
 
@@ -161,7 +161,7 @@ public class PWProtocol extends DvrClient {
 
                 // ANS:
                 // ANSOK   (2)
-                if( ans.code==2 ){
+                if( ans.getCode() ==2 ){
                     result.putInt("Result", 1);
                 }
 
@@ -192,14 +192,14 @@ public class PWProtocol extends DvrClient {
 
             // ANS:
             // ANSGETDATA   (302)
-            if( ans.code==302 && ans.size>0 ){
-                if( ans.databuf!=null ) {
-                    int nid = ans.data ;
-                    int idlen = ans.size/nid ;
+            if( ans.getCode() ==302 && ans.getSize() >0 ){
+                if( ans.getDatabuf() !=null ) {
+                    int nid = ans.getData();
+                    int idlen = ans.getSize() /nid ;
                     result = new Bundle();
-                    result.putInt("policeId_number", ans.data);
-                    result.putInt("policeId_size", ans.size );
-                    result.putByteArray("policeId_list", ans.databuf);
+                    result.putInt("policeId_number", ans.getData());
+                    result.putInt("policeId_size", ans.getSize());
+                    result.putByteArray("policeId_list", ans.getDatabuf());
                 }
             }
 
@@ -234,7 +234,7 @@ public class PWProtocol extends DvrClient {
 
                 // ANS:
                 // ANSOK   (2)
-                if( ans.code==2 ){
+                if( ans.getCode() ==2 ){
                     result.putInt("Result", 1);
                 }
             }
@@ -264,7 +264,7 @@ public class PWProtocol extends DvrClient {
 
                 // ANS:
                 // ANSOK   (2)
-                if( ans.code==2 ){
+                if( ans.getCode() ==2 ){
                     result.putInt("Result", 1);
                 }
             }
@@ -329,9 +329,9 @@ public class PWProtocol extends DvrClient {
 
             // ANS:
             // ANSGETDATA   (302)
-            if( ans.code==302 && ans.size>0 ){
-                if( ans.databuf!=null ) {
-                    result.putByteArray("PWStatus", ans.databuf);
+            if( ans.getCode() ==302 && ans.getSize() >0 ){
+                if( ans.getDatabuf() !=null ) {
+                    result.putByteArray("PWStatus", ans.getDatabuf());
                 }
             }
 
@@ -342,9 +342,9 @@ public class PWProtocol extends DvrClient {
 
             // ANS:
             // ANSGETDATA   (302)
-            if( ans.code==302 && ans.size>0 ){
-                if( ans.databuf!=null ) {
-                    String warning = new String(ans.databuf);
+            if( ans.getCode() ==302 && ans.getSize() >0 ){
+                if( ans.getDatabuf() !=null ) {
+                    String warning = new String(ans.getDatabuf());
                     result.putString("DiskInfo", warning.trim());
                 }
             }
@@ -385,7 +385,7 @@ public class PWProtocol extends DvrClient {
             boolean res = true ;
 
             // connect to remote server directly
-            if( connect(loginServer, loginPort) ) {
+            if( connect(getLoginServer(), getLoginPort()) ) {
                 String[] fields = null ;
                 String nonce = "nonce" ;
 
@@ -405,13 +405,13 @@ public class PWProtocol extends DvrClient {
                         digester.update( nonce.getBytes());
                         digester.update( params[1].getBytes() );
                         digester.update( params[2].getBytes() );
-                        digester.update( mId.getBytes());
+                        digester.update( getMId().getBytes());
                         byte[] digest = digester.digest();
                         for(int i=0; i<digest.length; i++ ) {
                             key+=String.format("%02x", digest[i]) ;
                         }
                     } catch (NoSuchAlgorithmException e) {}
-                    sendLine(String.format("session %s %s %s %s\n", params[0], key, params[2], mId));
+                    sendLine(String.format("session %s %s %s %s\n", params[0], key, params[2], getMId()));
                     fields = recvLine().split("\\s+");
                     if( fields.length<2 || fields[0].compareTo("ok")!=0  ) {
                         res = false ;
@@ -476,14 +476,14 @@ public class PWProtocol extends DvrClient {
                 udpSocket.setBroadcast(true);
 
                 // generic broadcast
-                udpSocket.send(new DatagramPacket(packet, 0, 4, new InetSocketAddress("255.255.255.255", mPort)));
+                udpSocket.send(new DatagramPacket(packet, 0, 4, new InetSocketAddress("255.255.255.255", getMPort())));
 
                 // multicast for dvr device
-                udpSocket.send(new DatagramPacket(packet, 0, 4, new InetSocketAddress("228.229.230.231", mPort)));
+                udpSocket.send(new DatagramPacket(packet, 0, 4, new InetSocketAddress("228.229.230.231", getMPort())));
 
                 // send to unicast to preset server ( over internet, maybe )
                 if( params.length>0 && params[0]!=null && params[0].length()>1 ) {
-                    udpSocket.send(new DatagramPacket(packet, 0, 4, new InetSocketAddress(params[0], mPort)));
+                    udpSocket.send(new DatagramPacket(packet, 0, 4, new InetSocketAddress(params[0], getMPort())));
                 }
 
                 HashSet <String> deviceSet = new HashSet <String> () ;
@@ -507,13 +507,13 @@ public class PWProtocol extends DvrClient {
                             // response from a PW device
                             String device = udpPacket.getAddress().getHostAddress();
                             if( deviceSet.add(device) ) {
-                                if (connect(device, mPort)) {
+                                if (connect(device, getMPort())) {
                                     // get host name
                                     //  REQSERVERNAME, 10
                                     Ans ans = request(10);
                                     //  ANSSERVERNAME  12
-                                    if ( ans.code == 12 && ans.databuf!=null) {
-                                        publishProgress(device, (new String(ans.databuf)).trim());
+                                    if ( ans.getCode() == 12 && ans.getDatabuf() !=null) {
+                                        publishProgress(device, (new String(ans.getDatabuf())).trim());
                                     }
                                 }
                                 close();
@@ -592,10 +592,10 @@ public class PWProtocol extends DvrClient {
             Ans ans = request(238);
 
             // ANSDAYLIST   (223)
-            if( ans.code==223 && ans.databuf != null ){
-                ByteBuffer daybuffer = ByteBuffer.wrap(ans.databuf);
+            if( ans.getCode() ==223 && ans.getDatabuf() != null ){
+                ByteBuffer daybuffer = ByteBuffer.wrap(ans.getDatabuf());
                 daybuffer.order(ByteOrder.LITTLE_ENDIAN) ;
-                daylist = new int [ans.size/4] ;
+                daylist = new int [ans.getSize() /4] ;
                 for( int i=0; i<daylist.length; i++) {
                     daylist[i] = daybuffer.getInt(i*4);
                 }
@@ -613,8 +613,8 @@ public class PWProtocol extends DvrClient {
 
                 // ANS:
                 // ANSDAYCLIPLIST   (222)
-                if( ans.code==222 && ans.databuf != null ) {
-                    String clips = new String(ans.databuf, 0, ans.size);
+                if( ans.getCode() ==222 && ans.getDatabuf() != null ) {
+                    String clips = new String(ans.getDatabuf(), 0, ans.getSize());
                     String cliplist[] = clips.split(",");
                     publishProgress(cliplist);
                 }
@@ -659,10 +659,10 @@ public class PWProtocol extends DvrClient {
             // REQDAYLIST   (238)
             Ans ans = request(238);
             // ANSDAYLIST   (223)
-            if( ans.code==223 && ans.databuf != null ) {
-                ByteBuffer daybuffer = ByteBuffer.wrap(ans.databuf);
+            if( ans.getCode() ==223 && ans.getDatabuf() != null ) {
+                ByteBuffer daybuffer = ByteBuffer.wrap(ans.getDatabuf());
                 daybuffer.order(ByteOrder.LITTLE_ENDIAN) ;
-                daylist = new int [ans.size/4] ;
+                daylist = new int [ans.getSize() /4] ;
                 for( int i=0; i<daylist.length; i++) {
                     daylist[i] = daybuffer.getInt(i*4);
                 }
