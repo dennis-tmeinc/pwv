@@ -7,35 +7,19 @@ package com.tme_inc.pwv
 
 import java.nio.ByteBuffer
 
-class MediaFrame(aframe: ByteArray, off: Int, l: Int, pTimestamp: Long, pFlags: Int) {
 
-    constructor(frame: ByteBuffer, off: Int, len: Int, pTimestamp: Long, pFlags: Int) : this(
-        frame.array(),
-        frame.arrayOffset() + off,
-        len,
-        pTimestamp,
-        pFlags
-    ) {
-    }
-
-    // key frame flags
-    val flags: Int = pFlags
-
+class MediaFrame(frame: ByteBuffer, offset: Int, val len: Int, var timestamp: Long, val flags: Int) {
     // frame time stamp in milliseconds
-    var timestamp: Long = pTimestamp
+    // key frame flags
+    val array = frame.array()
+    // position offset related to the array
+    val pos = frame.arrayOffset() + offset
 
-    @JvmField val array: ByteArray? = aframe
-
-    @JvmField val pos = off
-
-    @JvmField val len = l
-
-    operator fun get(index: Int): Byte {
-        return array!![pos + index]
+    operator fun get(i: Int): Byte {
+        return array[pos + i]
     }
 
-    fun geti(idx: Int): Int {
-        return get(idx).toInt() and 0xff
+    fun getInt(i: Int): Int {
+        return this[i].toInt() and 0xff
     }
-
 }

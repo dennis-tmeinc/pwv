@@ -14,9 +14,10 @@ import java.nio.ByteOrder
 open class DvrClient : PwvSocket() {
 
     protected var _connectMode: Int = 0
-    protected var connectMode: Int
+    public var connectMode: Int
         get() = _connectMode
-        set(mode: Int) = _setConnectMode(mode)
+        set(mode: Int) { _setConnectMode(mode) }
+
     protected var mHost: String? = null
     protected var mPort: Int = 0
 
@@ -39,13 +40,12 @@ open class DvrClient : PwvSocket() {
                 connect(loginServer!!, loginPort)
                 if (isConnected) {
                     sendLine(String.format("vserver %s %s %d\n", loginSessionId, loginTargetId, 80))
-                    val fields = recvLine().split("\\s+".toRegex()).dropLastWhile { it.isEmpty() }
-                        .toTypedArray()
+                    val fields = recvLine().split(Regex("\\s+"))
                     if (fields.size >= 3 && fields[0] == "ok") {
-                        if (fields[1] == "*") {
-                            fields[1] = loginServer.toString()
-                        }
-                        r = "http://" + fields[1] + ":" + fields[2] + "/"
+                        if (fields[1] == "*")
+                            r = "http://" + loginServer + ":" + fields[2] + "/"
+                        else
+                            r = "http://" + fields[1] + ":" + fields[2] + "/"
                     }
                 }
                 close()
@@ -56,21 +56,27 @@ open class DvrClient : PwvSocket() {
 
     open class Ans(
         var code: Int = 0,
-        var data: Int = 0,
-        var size: Int = 0,
-        var databuf: ByteArray? = null
-    )
+        var data: Int = 0
+    ) {
+        val size
+            get() = dataBuffer.remaining()
+        var dataBuffer: ByteBuffer = ByteBuffer.allocate(0)
+    }
 
     class Req (
         code: Int ,
         data: Int = 0,
-        databuf: ByteArray? = null,
-        var offset: Int = 0,
-        size: Int = if (databuf == null) 0 else databuf.size - offset
-    ) : Ans( code, data, size, databuf )
+        databuf: ByteBuffer? = null
+    ) : Ans( code, data ) {
+        init {
+            if( databuf != null ) {
+                dataBuffer = databuf
+            }
+        }
+    }
 
     init {
-        val prefs = pwvApp.appCtx.getSharedPreferences("pwv", 0)
+        val prefs = appCtx!!.getSharedPreferences("pwv", 0)
 
         mHost = prefs.getString("deviceIp", "192.168.1.100")
         mPort = prefs.getInt("dvrPort", 15114)
@@ -113,7 +119,7 @@ open class DvrClient : PwvSocket() {
     fun _setConnectMode(mode: Int) {
         _connectMode = mode
 
-        val prefs = pwvApp.appCtx.getSharedPreferences("pwv", 0)
+        val prefs = appCtx!!.getSharedPreferences("pwv", 0)
 
         mHost = prefs.getString("deviceIp", "192.168.1.100")
         mPort = prefs.getInt("dvrPort", 15114)
@@ -132,15 +138,15 @@ open class DvrClient : PwvSocket() {
 
     protected fun sendReq(req: Req): Boolean {
         if (connect()) {
-            val ba = ByteArray(12)
-            val bb = ByteBuffer.wrap(ba)
-            bb.order(ByteOrder.LITTLE_ENDIAN)
-            bb.putInt(req.code)
-            bb.putInt(req.data)
-            bb.putInt(req.size)
-            if (send(ba) > 0) {
-                if (req.size > 0 && req.databuf != null) {
-                    if (send(req.databuf!!, req.offset, req.size) > 0) {
+            val buffer = ByteBuffer.allocate(12)
+            buffer.order(ByteOrder.LITTLE_ENDIAN)
+            buffer.putInt(req.code)
+            buffer.putInt(req.data)
+            buffer.putInt(req.size)
+            buffer.flip()
+            if (send(buffer) > 0) {
+                if (req.size > 0) {
+                    if (send(req.dataBuffer) > 0) {
                         return true
                     }
                 } else {
@@ -153,15 +159,21 @@ open class DvrClient : PwvSocket() {
     }
 
     fun recvAns(): Ans {
-        val r = recv(12)
-        if (r != null) {
-            val bb = ByteBuffer.wrap(r)
+        val bb = ByteBuffer.allocate(12)
+        if (recv(bb) >= 12) {
             bb.order(ByteOrder.LITTLE_ENDIAN)
-            val ans = Ans(bb.int, bb.int, bb.int)
-            if (ans.code > 0 && ans.size > 0 && ans.size < 10000000) {
-                ans.databuf = recv(ans.size)
+            val ans = Ans(bb.int, bb.int)
+            val anssize = bb.int
+            if (ans.code > 0 && anssize > 0 && anssize < 10000000) {
+                //ans.databuf = recv(ans.size)
+                ans.dataBuffer = ByteBuffer.allocate(anssize)
+                if (recv(ans.dataBuffer) >= anssize) {
+                    return ans
+                }
             }
-            return ans;
+            else {
+                return ans
+            }
         }
         return Ans()
     }
@@ -180,19 +192,9 @@ open class DvrClient : PwvSocket() {
     fun request(
         reqcode: Int,
         reqdata: Int = 0,
-        dataarray: ByteArray? = null,
-        offset: Int = 0,
-        reqsize: Int = 0
+        dataBuffer: ByteBuffer? = null
     ): Ans {
-        return request(
-            Req(
-                reqcode,
-                reqdata,
-                dataarray,
-                offset,
-                if (reqsize == 0 && dataarray != null) dataarray.size - offset else reqsize
-            )
-        )
+        return request(Req(reqcode, reqdata, dataBuffer))
     }
 
     companion object {

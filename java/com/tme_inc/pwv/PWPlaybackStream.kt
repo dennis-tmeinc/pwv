@@ -53,7 +53,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                         handlePWMessage(msg)
                     }
                 }
-                mPWHandler!!.sendEmptyMessage(PWMessage.MSG_PW_CONNECT)
+                mPWHandler!!.sendEmptyMessage(MSG_PW_CONNECT)
             }
 
         }
@@ -67,7 +67,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
         // wait until thread is actually started
         mThread!!.looper
         if (isRunning) {
-            mPWHandler!!.sendEmptyMessage(PWMessage.MSG_PW_GETFRAME)
+            mPWHandler!!.sendEmptyMessage(MSG_PW_GETFRAME)
         }
     }
 
@@ -75,7 +75,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
         super.release()
 
         if (isRunning) {
-            mPWHandler!!.sendEmptyMessage(PWMessage.MSG_PW_QUIT)     // send quit message
+            mPWHandler!!.sendEmptyMessage(MSG_PW_QUIT)     // send quit message
         }
         mUIHandler = null
     }
@@ -102,7 +102,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                         calendar.get(Calendar.SECOND)
             }
 
-            mPWHandler!!.obtainMessage(PWMessage.MSG_PW_SEEK, sdate, stime).sendToTarget()
+            mPWHandler!!.obtainMessage(MSG_PW_SEEK, sdate, stime).sendToTarget()
         }
 
     }
@@ -110,14 +110,14 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
     // date in yyyyMMDD
     fun getClipList(date: Int) {
         if (isRunning) {
-            mPWHandler!!.obtainMessage(PWMessage.MSG_PW_GETCLIPLIST, date, 0).sendToTarget()
+            mPWHandler!!.obtainMessage(MSG_PW_GETCLIPLIST, date, 0).sendToTarget()
         }
     }
 
     // handle msg on PW Thread
     internal fun handlePWMessage(msg: Message) {
         when (msg.what) {
-            PWMessage.MSG_PW_QUIT  // quit thread
+            MSG_PW_QUIT  // quit thread
             -> {
                 if (connect() && mPlaybackHandle != 0) {
                     // to close stream handle before close connection
@@ -131,7 +131,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 mClient.close()
             }
 
-            PWMessage.MSG_PW_CONNECT -> if (connect()) {
+            MSG_PW_CONNECT -> if (connect()) {
                 var digester: MessageDigest?
                 try {
                     digester = MessageDigest.getInstance("MD5")
@@ -150,14 +150,13 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 //
                 //  send REQGETCHANNELSETUP
                 var ans: DvrClient.Ans = mClient.request(14, mChannel)
-                if (ans.databuf != null && ans.code == 11) {
-                    val bb = ByteBuffer.wrap(ans.databuf)
-                    bb.order(ByteOrder.LITTLE_ENDIAN)
-                    if (bb.getInt(0) != 0) {
-                        resolution = bb.getInt(68)
+                if ( ans.code == 11 && ans.size > 0 ) {
+                    ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                    if (ans.dataBuffer.getInt(0) != 0) {
+                        resolution = ans.dataBuffer.getInt(68)
                     }
                     if (digester != null)
-                        digester.update(ans.databuf)
+                        digester.update(ans.dataBuffer.array())
                 }
 
                 // get Channel Info
@@ -172,14 +171,15 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                     totalChannels = ans.data
                     if (totalChannels > 0) {
                         if (digester != null)
-                            digester.update(ans.databuf)
+                            digester.update(ans.dataBuffer.array())
                         mChannelNames = arrayOfNulls(totalChannels)
                         for (i in 0 until totalChannels) {
                             mChannelNames[i] = String(
-                                ans.databuf!!,
-                                72 * i + 8,
-                                64
-                            ).split("\u0000".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0]
+                                ans.dataBuffer.array(),
+                                ans.dataBuffer.arrayOffset() + ans.dataBuffer.position() + 72 * i + 8,
+                                64,
+                                Charsets.UTF_8
+                            ).split("\u0000")[0]
                         }
                     }
                 }
@@ -189,13 +189,12 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
 
                     //  REQSTREAMDAYLIST   (214)
                     ans = mClient.request(214, mPlaybackHandle)
-                    if (ans.code == 207 && ans.databuf != null) {    //ANSSTREAMDAYLIST : 207
-                        val b = ByteBuffer.wrap(ans.databuf)
-                        b.order(ByteOrder.LITTLE_ENDIAN)
+                    if (ans.code == 207 && ans.size > 0) {    //ANSSTREAMDAYLIST : 207
+                        ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
                         val s = ans.size / 4
                         dayList = IntArray(s)
                         for (i in 0 until s) {
-                            dayList[i] = b.getInt(i * 4)
+                            dayList[i] = ans.dataBuffer.getInt(i * 4)
                         }
                     }
 
@@ -210,52 +209,49 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 }
 
                 if (mUIHandler != null) {
-                    mUIHandler!!.obtainMessage(PWMessage.MSG_PW_CONNECT).sendToTarget()
+                    mUIHandler!!.obtainMessage(MSG_PW_CONNECT).sendToTarget()
                 }
 
             }
 
-            PWMessage.MSG_PW_GETFRAME -> if (connect() && mPlaybackHandle != 0) {
+            MSG_PW_GETFRAME -> if (connect() && mPlaybackHandle != 0) {
                 if (mVideoFrameQueue.size < 100) {
 
                     // REQ2STREAMGETDATAEX (233)
                     val ans = mClient.request(233, mPlaybackHandle)
                     if (ans.code == 218 && ans.size > 32) {    //ANS2STREAMDATAEX : 218
-                        if (ans.databuf != null) {
-                            val bb = ByteBuffer.wrap(ans.databuf)
-                            bb.order(ByteOrder.LITTLE_ENDIAN)
+                            ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
                             // response contain header of structure dvrtime
                             val cal = GregorianCalendar(
-                                bb.int,
-                                bb.int - 1 + Calendar.JANUARY,
-                                bb.int,
-                                bb.int,
-                                bb.int,
-                                bb.int
+                                ans.dataBuffer.int,
+                                ans.dataBuffer.int - 1 + Calendar.JANUARY,
+                                ans.dataBuffer.int,
+                                ans.dataBuffer.int,
+                                ans.dataBuffer.int,
+                                ans.dataBuffer.int
                             )
-                            resetTimestamp(cal.timeInMillis + bb.int)
+                            resetTimestamp(cal.timeInMillis + ans.dataBuffer.int)
 
-                            bb.order(ByteOrder.BIG_ENDIAN)
-                            bb.position(32)
-                            onReceiveFrame(bb)
-                        }
+                            ans.dataBuffer.order(ByteOrder.BIG_ENDIAN)
+                            ans.dataBuffer.position(32)
+                            onReceiveFrame(ans.dataBuffer)
                     } else {
                         // end of stream?
                         m_eos = true
                         return
                     }
-                    mPWHandler!!.sendEmptyMessage(PWMessage.MSG_PW_GETFRAME)
+                    mPWHandler!!.sendEmptyMessage(MSG_PW_GETFRAME)
                 } else {
-                    if (!mPWHandler!!.hasMessages(PWMessage.MSG_PW_GETFRAME)) {
-                        mPWHandler!!.sendEmptyMessageDelayed(PWMessage.MSG_PW_GETFRAME, 1000)
+                    if (!mPWHandler!!.hasMessages(MSG_PW_GETFRAME)) {
+                        mPWHandler!!.sendEmptyMessageDelayed(MSG_PW_GETFRAME, 1000)
                     }
                 }
             } else {
-                mPWHandler!!.sendEmptyMessageDelayed(PWMessage.MSG_PW_CONNECT, 10000)
+                mPWHandler!!.sendEmptyMessageDelayed(MSG_PW_CONNECT, 10000)
             }
 
-            PWMessage.MSG_PW_SEEK -> if (connect() && mPlaybackHandle != 0) {
+            MSG_PW_SEEK -> if (connect() && mPlaybackHandle != 0) {
                 // clear all queued frames
                 clearQueue()
 
@@ -285,20 +281,20 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 dvrtime.putInt(24, 0)
                 dvrtime.putInt(28, 0)
 
-                val ans = mClient.request(204, mPlaybackHandle, dvrtime.array())
+                val ans = mClient.request(204, mPlaybackHandle, dvrtime)
 
                 m_eos = false
-                if (ans.code == 2 && ans.size >= 40 && ans.databuf != null) {    // ANSOK : 2
+                if (ans.code == 2 && ans.size >= 40 ) {    // ANSOK : 2
                     // treat file header as a frame
-                    onReceiveFrame(ByteBuffer.wrap(ans.databuf))
+                    onReceiveFrame(ans.dataBuffer)
                 }
 
                 if (mUIHandler != null) {
-                    mUIHandler!!.obtainMessage(PWMessage.MSG_PW_SEEK).sendToTarget()
+                    mUIHandler!!.obtainMessage(MSG_PW_SEEK).sendToTarget()
                 }
             }
 
-            PWMessage.MSG_PW_GETCLIPLIST -> if (connect() && mPlaybackHandle != 0) {
+            MSG_PW_GETCLIPLIST -> if (connect() && mPlaybackHandle != 0) {
 
                 var clipInfo = intArrayOf()
                 var lockInfo = intArrayOf()
@@ -319,31 +315,28 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 dvrtime.putInt(0, msg.arg1 / 10000)           // year
                 dvrtime.putInt(4, msg.arg1 / 100 % 100)      // month
                 dvrtime.putInt(8, msg.arg1 % 100)            // day
-                var ans: DvrClient.Ans = mClient.request(210, mPlaybackHandle, dvrtime.array())
-                if (ans.code == 204) {    //ANSSTREAMDAYINFO : 204
+                var ans: DvrClient.Ans = mClient.request(210, mPlaybackHandle, dvrtime)
+                if (ans.code == 204 && ans.size > 0) {    //ANSSTREAMDAYINFO : 204
                     // struct dayinfoitem {
                     //    int ontime  ;		// seconds of the day
                     //    int offtime ;		// seconds of the day
                     // } ;
-                    if (ans.databuf != null) {
-                        val bb = ByteBuffer.wrap(ans.databuf)
-                        bb.order(ByteOrder.LITTLE_ENDIAN)
+                        ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
                         val s = ans.size / 8
                         if (s > 0) {
                             clipInfo = IntArray(s * 2)
                             var i = 0
                             while (i < s * 2) {
-                                clipInfo[i] = bb.getInt(i * 4)
-                                clipInfo[i + 1] = bb.getInt((i + 1) * 4)
+                                clipInfo[i] = ans.dataBuffer.getInt(i * 4)
+                                clipInfo[i + 1] = ans.dataBuffer.getInt((i + 1) * 4)
                                 i += 2
                             }
                         }
-                    }
                 }
 
                 if (mUIHandler != null) {
                     mUIHandler!!.obtainMessage(
-                        PWMessage.MSG_PW_GETCLIPLIST,
+                        MSG_PW_GETCLIPLIST,
                         msg.arg1,
                         1,
                         clipInfo as Any
@@ -351,39 +344,36 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 }
 
                 // REQLOCKINFO   (212)
-                ans = mClient.request(212, mPlaybackHandle, dvrtime.array())
+                ans = mClient.request(212, mPlaybackHandle, dvrtime)
 
-                if (ans.code == 204) {    //ANSSTREAMDAYINFO : 204
+                if (ans.code == 204 && ans.size > 0) {    //ANSSTREAMDAYINFO : 204
                     // struct dayinfoitem {
                     //    int ontime  ;		// seconds of the day
                     //    int offtime ;		// seconds of the day
                     // } ;
-                    if (ans.databuf != null) {
-                        val bb = ByteBuffer.wrap(ans.databuf)
-                        bb.order(ByteOrder.LITTLE_ENDIAN)
-                        val s = ans.size / 8
-                        if (s > 0) {
-                            lockInfo = IntArray(s * 2)
-                            var i = 0
-                            while (i < s * 2) {
-                                lockInfo[i] = bb.getInt(i * 4)
-                                lockInfo[i + 1] = bb.getInt((i + 1) * 4)
-                                i += 2
-                            }
+                    ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                    val s = ans.size / 8
+                    if (s > 0) {
+                        lockInfo = IntArray(s * 2)
+                        var i = 0
+                        while (i < s * 2) {
+                            lockInfo[i] = ans.dataBuffer.getInt(i * 4)
+                            lockInfo[i + 1] = ans.dataBuffer.getInt((i + 1) * 4)
+                            i += 2
                         }
                     }
                 }
 
                 if (mUIHandler != null) {
                     mUIHandler!!.obtainMessage(
-                        PWMessage.MSG_PW_GETCLIPLIST,
+                        MSG_PW_GETCLIPLIST,
                         msg.arg1,
                         2,
                         lockInfo as Any
                     ).sendToTarget()
                 }
             } else {
-                mPWHandler!!.sendEmptyMessage(PWMessage.MSG_PW_CONNECT)
+                mPWHandler!!.sendEmptyMessage(MSG_PW_CONNECT)
             }
         }
     }
@@ -404,7 +394,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                     mPlaybackHandle = ans.data
                     if (ans.size >= 40) {
                         // this is 40 bytes file header
-                        onReceiveFrame(ByteBuffer.wrap(ans.databuf))
+                        onReceiveFrame(ans.dataBuffer)
                     }
                 }
             }

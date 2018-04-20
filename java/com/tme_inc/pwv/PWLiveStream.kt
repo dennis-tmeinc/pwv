@@ -76,13 +76,12 @@ class PWLiveStream(channel: Int) : PWStream(channel) {
                         //
                         //  send REQGETCHANNELSETUP
                         ans = dvrClient.request(14, mChannel)
-                        if (ans.databuf != null && ans.code == 11) {
-                            val bb = ByteBuffer.wrap(ans.databuf)
-                            bb.order(ByteOrder.LITTLE_ENDIAN)
-                            if (bb.getInt(0) != 0)
-                                resolution = bb.getInt(68)
+                        if (ans.size>0 && ans.code == 11) {
+                            ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                            if (ans.dataBuffer.getInt(0) != 0)
+                                resolution = ans.dataBuffer.getInt(68)
                             if (digester != null)
-                                digester.update(ans.databuf)
+                                digester.update(ans.dataBuffer.array())
                         }
 
                         totalChannels = 8     // default to 8 channels ^^
@@ -96,18 +95,18 @@ class PWLiveStream(channel: Int) : PWStream(channel) {
                         ans = dvrClient.request(4)
                         if (ans.code == 7) {
                             totalChannels = ans.data
-                            if (ans.databuf != null) {
+                            if (ans.size > 0) {
                                 if (digester != null)
-                                    digester.update(ans.databuf)
+                                    digester.update(ans.dataBuffer.array())
                                 mChannelNames = Array<String?>(totalChannels,{""})
                                 synchronized(this) {
                                     for (i in 0 until totalChannels) {
                                         mChannelNames[i] = String(
-                                            ans.databuf!!,
-                                            72 * i + 8,
+                                            ans.dataBuffer.array(),
+                                            ans.dataBuffer.arrayOffset() + ans.dataBuffer.position() + 72 * i + 8,
                                             64,
                                             Charsets.UTF_8
-                                        ).split("\u0000".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0]
+                                        ).split("\u0000")[0]
                                     }
                                 }
                             }
@@ -129,20 +128,19 @@ class PWLiveStream(channel: Int) : PWStream(channel) {
 
                         // REQ2GETLOCALTIME
                         ans = dvrClient.request(218)
-                        if (ans.code == 211 && ans.databuf != null && ans.databuf!!.size >= 28) {         // ANS2TIME
-                            val bb = ByteBuffer.wrap(ans.databuf)
-                            bb.order(ByteOrder.LITTLE_ENDIAN)
+                        if (ans.code == 211 && ans.size >= 28) {         // ANS2TIME
+                            ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
                             // response contain header of structure dvrtime
                             val cal = GregorianCalendar(
-                                bb.int,
-                                bb.int - 1 + Calendar.JANUARY,
-                                bb.int,
-                                bb.int,
-                                bb.int,
-                                bb.int
+                                ans.dataBuffer.int,
+                                ans.dataBuffer.int - 1 + Calendar.JANUARY,
+                                ans.dataBuffer.int,
+                                ans.dataBuffer.int,
+                                ans.dataBuffer.int,
+                                ans.dataBuffer.int
                             )
-                            resetTimestamp(cal.timeInMillis + bb.int)
+                            resetTimestamp(cal.timeInMillis + ans.dataBuffer.int)
                         }
 
                         // send REQOPENLIVE packet
@@ -157,12 +155,12 @@ class PWLiveStream(channel: Int) : PWStream(channel) {
                             while (mRunning && dvrClient.isConnected && !isInterrupted) {
                                 // read dvr ans header
                                 ans = dvrClient.recvAns()
-                                if (ans.code == 202 && ans.databuf!=null) {                           // ANSSTREAMDATA
+                                if (ans.code == 202 && ans.size>0) {                           // ANSSTREAMDATA
                                     if (ans.data == 10 && ans.size == 40) {      // FRAMETYPE_264FILEHEADER
-                                        setheader(ans.databuf!!)
-                                        onHeader(ByteBuffer.wrap(ans.databuf))
+                                        setheader(ans.dataBuffer.array())
+                                        onHeader(ans.dataBuffer)
                                     } else {
-                                        onReceiveFrame(ByteBuffer.wrap(ans.databuf))
+                                        onReceiveFrame(ans.dataBuffer)
                                     }
                                 } else {                // ANSSTREAMOPEN
                                     break

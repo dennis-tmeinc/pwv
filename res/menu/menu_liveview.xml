@@ -6,15 +6,17 @@
         android:title="@string/action_playback"
         android:orderInCategory="100" />
 
-    <item android:id="@+id/device_setup"
-        android:title="@string/action_device_setup"
+    <item
+        android:id="@+id/device_setup"
         android:orderInCategory="100"
-        />
+        android:title="@string/action_device_setup" />
 
-    <item android:id="@+id/video_archive"
-        android:title="@string/action_video_archive"
+    <item
+        android:id="@+id/video_archive"
+        android:checkable="false"
+        android:enabled="false"
         android:orderInCategory="100"
-        android:visible="false"
-        android:enabled="false" />
+        android:title="@string/action_video_archive"
+        android:visible="false" />
 
 </menu>

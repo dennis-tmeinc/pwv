@@ -7,29 +7,26 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
-import android.webkit.JavascriptInterface
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.*
 import android.widget.Toast
 
 import java.net.URI
 import java.net.URISyntaxException
 
+// kotlin imports
+import kotlinx.android.synthetic.main.activity_pw_web_view.*
+
 class PwWebView : Activity() {
 
     private var m_originalUrl: String? = null
-    private var m_webView: WebView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pw_web_view)
 
-        m_webView = findViewById(R.id.webview)
-
-        val webSettings = m_webView!!.settings
+        val webSettings = webview!!.settings
         webSettings.javaScriptEnabled = true
-        m_webView!!.webViewClient = object : WebViewClient() {
+        webview.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                 try {
                     var uri = URI(url)
@@ -48,26 +45,25 @@ class PwWebView : Activity() {
             }
         }
 
-        val intent = intent
-        val title = intent.getStringExtra("TITLE")
+        val title = intent!!.getStringExtra("TITLE")
         if (title != null) {
             setTitle(title)
         }
 
         if (savedInstanceState != null) {
-            m_webView!!.restoreState(savedInstanceState)
+            webview.restoreState(savedInstanceState)
         } else {
-            val url = intent.getStringExtra("URL")
+            val url = intent!!.getStringExtra("URL")
             if (url != null) {
                 m_originalUrl = url
-                m_webView!!.loadUrl(url)
+                webview.loadUrl(url)
             }
         }
     }
 
     override fun onBackPressed() {
-        if (m_webView!!.canGoBack()) {
-            m_webView!!.goBack()
+        if (webview.canGoBack()) {
+            webview.goBack()
         } else {
             super.onBackPressed()
         }
@@ -75,8 +71,7 @@ class PwWebView : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-
-        m_webView!!.saveState(outState)
+        webview.saveState(outState)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -86,10 +81,7 @@ class PwWebView : Activity() {
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        val id = item.itemId
-
-
-        if (id == R.id.action_close) {
+        if (item.itemId == R.id.action_close) {
             finish()
             return true
         } else {

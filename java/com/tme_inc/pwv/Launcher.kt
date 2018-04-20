@@ -9,7 +9,9 @@ import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
-import com.tme_inc.pwv.R.id.button_start
+
+// kotlin synthetic extension
+import kotlinx.android.synthetic.main.activity_launcher.*
 
 class Launcher : Activity() {
 
@@ -20,21 +22,13 @@ class Launcher : Activity() {
         setContentView(R.layout.activity_launcher)
 
         val prefs = getSharedPreferences("pwv", 0)
-        val officerId = prefs.getString("officerId", "00001")
-        val dvrIp = prefs.getString("dvrIp", "192.168.1.100")
         mdvrPort = prefs.getInt("dvrPort", 15114)
-        val autoStart = prefs.getBoolean("AutoStart", false)
 
-        var editText = findViewById<View>(R.id.OfficerID) as EditText
-        editText.setText(officerId)
-        editText = findViewById<View>(R.id.DVRIPAddress) as EditText
-        editText.setText(dvrIp)
+        OfficerID.setText(prefs.getString("officerId", "00001"))
+        DVRIPAddress.setText(prefs.getString("dvrIp", "192.168.1.100"))
+        autostart.isChecked = prefs.getBoolean("AutoStart", false)
 
-        val cbAutoStart = findViewById<View>(R.id.autostart) as CheckBox
-        cbAutoStart.isChecked = autoStart
-
-        val button = findViewById<View>(R.id.button_start) as Button
-        button.setOnClickListener(object : View.OnClickListener {
+        button_start.setOnClickListener(object : View.OnClickListener {
             override fun onClick(v: View) {
                 savePref()
                 val intent = Intent(baseContext, Liveview::class.java)

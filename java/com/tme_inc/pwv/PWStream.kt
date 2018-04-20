@@ -11,6 +11,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.*
 import java.util.Arrays.copyOfRange
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.experimental.and
 
 /**
@@ -18,9 +19,9 @@ import kotlin.experimental.and
  */
 open class PWStream(channel: Int) {
 
-    protected var mVideoFrameQueue: Queue<MediaFrame> = LinkedList()
-    protected var mAudioFrameQueue: Queue<MediaFrame> = LinkedList()
-    protected var mTextFrameQueue: Queue<MediaFrame> = LinkedList()
+    protected var mVideoFrameQueue: Queue<MediaFrame> = ConcurrentLinkedQueue()
+    protected var mAudioFrameQueue: Queue<MediaFrame> = ConcurrentLinkedQueue()
+    protected var mTextFrameQueue: Queue<MediaFrame> = ConcurrentLinkedQueue()
 
     var resolution = 0
         protected set                   // channel resolution
@@ -62,14 +63,14 @@ open class PWStream(channel: Int) {
             }
         }
 
-    val videoFrame: MediaFrame
-        @Synchronized get() = mVideoFrameQueue.poll()
+    val videoFrame: MediaFrame?
+        get() = mVideoFrameQueue.poll()
 
-    val audioFrame: MediaFrame
-        @Synchronized get() = mAudioFrameQueue.poll()
+    val audioFrame: MediaFrame?
+        get() = mAudioFrameQueue.poll()
 
-    val textFrame: MediaFrame
-        @Synchronized get() = mTextFrameQueue.poll()
+    val textFrame: MediaFrame?
+        get() = mTextFrameQueue.poll()
 
     init {
         mChannel = channel
@@ -99,11 +100,11 @@ open class PWStream(channel: Int) {
 
             var tvskey: ByteArray?
 
-            tvskey = pwvApp.readFile("tvskey")
+            tvskey = readFile("tvskey")
             if (tvskey != null) {
                 // send REQCHECKKEY packet
                 //          REQCHECKKEY, 303
-                ans = connection.request(303, 0, tvskey)
+                ans = connection.request(303, 0, ByteBuffer.wrap(tvskey))
                 if (ans.code == 2) {       // ANSOK
                     resetheader(tvskey)
                     return true
@@ -111,43 +112,44 @@ open class PWStream(channel: Int) {
             }
 
             // check tvskey MF5000
-            tvskey = pwvApp.readResFile(R.raw.tvskey_mf5000)
+            tvskey = readResFile(R.raw.tvskey_mf5000)
 
             // send REQCHECKKEY packet
             //          REQCHECKKEY, 303
-            ans = connection.request(303, 0, tvskey)
+            ans = connection.request(303, 0, ByteBuffer.wrap(tvskey))
             if (ans.code == 2) {       // ANSOK
-                pwvApp.saveFile("tvskey", tvskey)
+                saveFile("tvskey", tvskey)
                 resetheader(tvskey)
                 return true
             }
 
             // check tvskey MF5001
-            tvskey = pwvApp.readResFile(R.raw.tvskey_mf5001)
+            tvskey = readResFile(R.raw.tvskey_mf5001)
 
             // send REQCHECKKEY packet
             //          REQCHECKKEY, 303
-            ans = connection.request(303, 0, tvskey)
+            ans = connection.request(303, 0, ByteBuffer.wrap(tvskey))
             if (ans.code == 2) {       // ANSOK
-                pwvApp.saveFile("tvskey", tvskey)
+                saveFile("tvskey", tvskey)
                 resetheader(tvskey)
                 return true
             }
 
             // check external tvskey
-            val extkey = pwvApp.appCtx.getExternalFilesDir(null)
+            val extkey = appCtx!!.getExternalFilesDir(null)
             if (extkey!!.isDirectory) {
                 val keyfiles = extkey.listFiles(FileFilter { true })
                 for (keyfile in keyfiles) {
                     try {
+                        tvskey = ByteArray(8000)
                         val fi = FileInputStream(keyfile)
-                        val r = fi.read(tvskey!!)
+                        val r = fi.read(tvskey)
 
                         // send REQCHECKKEY packet
                         //          REQCHECKKEY, 303
-                        ans = connection.request(303, 0, tvskey, 0, r)
+                        ans = connection.request(303, 0, ByteBuffer.wrap(tvskey, 0, r))
                         if (ans.code == 2) {       // ANSOK
-                            pwvApp.saveFile("tvskey", tvskey)
+                            saveFile("tvskey", tvskey)
                             resetheader(tvskey)
                             return true
                         }
@@ -253,7 +255,7 @@ open class PWStream(channel: Int) {
 
     @Synchronized
     fun videoAvailable(): Boolean {
-        return peekVideoFrame() != null
+        return mVideoFrameQueue.isNotEmpty()
     }
 
     @Synchronized
@@ -263,7 +265,7 @@ open class PWStream(channel: Int) {
 
     @Synchronized
     fun audioAvailable(): Boolean {
-        return peekAudioFrame() != null
+        return mAudioFrameQueue.isNotEmpty()
     }
 
     @Synchronized
@@ -273,7 +275,7 @@ open class PWStream(channel: Int) {
 
     @Synchronized
     fun textAvailable(): Boolean {
-        return peekTextFrame() != null
+        return mTextFrameQueue.isNotEmpty()
     }
 
 
@@ -406,7 +408,7 @@ open class PWStream(channel: Int) {
                 }
                 if (syncend > sync0x67 + 8 && syncend < pos + len) {
                     mStarted = true
-                    mVideoFrameQueue.add(
+                    mVideoFrameQueue.offer(
                         MediaFrame(
                             frame,
                             sync0x67,
@@ -415,7 +417,7 @@ open class PWStream(channel: Int) {
                             MediaCodec.BUFFER_FLAG_CODEC_CONFIG
                         )
                     )
-                    mVideoFrameQueue.add(
+                    mVideoFrameQueue.offer(
                         MediaFrame(
                             frame,
                             syncend,
@@ -427,7 +429,7 @@ open class PWStream(channel: Int) {
                 }
             }
         } else {
-            mVideoFrameQueue.add(MediaFrame(frame, pos, len, frameTS, flags))
+            mVideoFrameQueue.offer(MediaFrame(frame, pos, len, frameTS, flags))
         }
         return pesSize
     }
@@ -458,7 +460,7 @@ open class PWStream(channel: Int) {
 
         // get time stamp from video PES packet
         frameTS = timeStamp(frame)
-        mAudioFrameQueue.add(
+        mAudioFrameQueue.offer(
             MediaFrame(
                 frame,
                 pos + pesHeaderLen,
@@ -480,7 +482,7 @@ open class PWStream(channel: Int) {
         frame.order(xorder)
 
         x_textframe = MediaFrame(frame, pos + 8, txtLen, frameTS, 0)
-        mTextFrameQueue.add(x_textframe)
+        mTextFrameQueue.offer(x_textframe)
         return 8 + txtLen
     }
 
@@ -494,7 +496,7 @@ open class PWStream(channel: Int) {
 
         init {
             // initial file decryption table
-            val tvskey = pwvApp.readResFile(R.raw.tvskey_mf5000)
+            val tvskey = readResFile(R.raw.tvskey_mf5000)
             resetheader(tvskey)
         }
 

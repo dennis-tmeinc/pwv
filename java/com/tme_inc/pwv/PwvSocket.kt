@@ -6,6 +6,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.nio.ByteBuffer
 
 /**
  * Created by dennis on 09/06/15.
@@ -72,7 +73,8 @@ open class PwvSocket(s: Socket? = null) : Closeable {
             try {
                 if (iStream == null)
                     iStream = mSocket!!.getInputStream()
-                r = iStream!!.read(rbuf, offset, rsize)
+                if( iStream != null )
+                    r = iStream!!.read(rbuf, offset, rsize)
             } catch (e: IOException) {
                 r = 0
             }
@@ -85,8 +87,7 @@ open class PwvSocket(s: Socket? = null) : Closeable {
     }
 
     // (block) read until buffer is filled, or socket closed
-    @JvmOverloads
-    fun recv(rbuf: ByteArray, offset: Int = 0, rsize: Int = rbuf.size): Int {
+    fun recv(rbuf: ByteArray, offset: Int = 0, rsize: Int = rbuf.size - offset ): Int {
         var tr = 0         // total read bytes
         while (rsize > tr) {
             val r = recv1(rbuf, offset + tr, rsize - tr)
@@ -98,9 +99,12 @@ open class PwvSocket(s: Socket? = null) : Closeable {
         return tr
     }
 
-    fun recv(size: Int): ByteArray? {
-        val b = ByteArray(size)
-        return if (recv(b) == size) b else null
+    fun recv(rbuf: ByteBuffer) : Int {
+        val r = recv( rbuf.array(), rbuf.arrayOffset()+rbuf.position(), rbuf.remaining() )
+        if( r>0 ) {
+            rbuf.limit(rbuf.position()+r)
+        }
+        return r
     }
 
     // receive one line of input
@@ -118,7 +122,7 @@ open class PwvSocket(s: Socket? = null) : Closeable {
     }
 
     @JvmOverloads
-    fun send(buffer: ByteArray, offset: Int = 0, count: Int = buffer.size): Int {
+    fun send(buffer: ByteArray, offset: Int = 0, count: Int = buffer.size - offset): Int {
         if (mSocket != null) {
             try {
                 if (oStream == null)
@@ -131,6 +135,16 @@ open class PwvSocket(s: Socket? = null) : Closeable {
         }
         return 0
     }
+
+    fun send( buffer: ByteBuffer): Int =
+        if (buffer.hasArray() && buffer.hasRemaining())
+            send(
+                buffer.array(),
+                buffer.arrayOffset() + buffer.position(),
+                buffer.remaining()
+            )
+        else
+            0
 
     fun sendLine(line: String): Int {
         return send(line.toByteArray())
