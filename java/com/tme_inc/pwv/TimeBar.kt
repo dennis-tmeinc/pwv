@@ -30,12 +30,11 @@ class TimeBar @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyle: Int = 0
-) : View(context, attrs, defStyle) {
+    )
+    : View(context, attrs, defStyle) {
 
-    // State objects and values related to gesture tracking.
-    private val mScaleGestureDetector: ScaleGestureDetector
-    private val mGestureDetector: GestureDetector
-    private val mScroller: OverScroller
+    // UI thread handler from hosting activity
+    var uiHandler: Handler? = null
 
     // Edge effect / overscroll tracking objects.
     private val mEdgeEffect = EdgeEffect(context)
@@ -45,13 +44,11 @@ class TimeBar @JvmOverloads constructor(
     // Viewport
     private val mViewportWidthMin: Int = 300                    // 5 min
     private val mViewportWidthMax: Int = 30 * 24 * 60 * 60      // 30 days
-    private var mViewportWidth: Int =
-        3600                      // View port width in seconds, 1 hour default
+    private var mViewportWidth: Int = 3600                      // View port width in seconds, 1 hour default
 
     // View size ;
-    private var mWidth: Int =
-        600                               // Width in pixels, 600 default, will be changed by onSizeChanged()
-    private var mHeight: Int = 0
+    private var mWidth =  600                               // Width in pixels, 600 default, will be changed by onSizeChanged()
+    private var mHeight = 20
 
     // Minimum time (Start Time) in calendar time seconds
     private var mPosMin: Long = 0
@@ -59,142 +56,143 @@ class TimeBar @JvmOverloads constructor(
     // Position Range, in seconds
     private var mPosRange: Int = 0
     private var mPos: Int = 0                   // center time (related to mPosMin)
+
     var isSeekPending: Boolean = false
         private set      // indicate a seek operating is pending
 
-    private var mDensity = 1f       // draw density
+    private val mDensity = context.resources.displayMetrics.density
 
     // clip info cache
     private val mClipInfo = SparseArray<IntArray>()
     private val mLockInfo = SparseArray<IntArray>()
 
-    // UI thread handler from hosting activity
-    private var mUiHandler: Handler? = null
-
     private var mTouch: Boolean = false
     private var mTouchDelayTime: Long = 0
 
     private val mPosToast: Toast = Toast.makeText(context, "", Toast.LENGTH_SHORT)
-    private val nColorPaint: Paint
-    private val lColorPaint: Paint
 
+    // paints and colors
+    private val nColor = context.resources.getColor(R.color.timebar_ncolor)
+    private val lColor = context.resources.getColor(R.color.timebar_lcolor)
+
+    private val colorPaint = Paint()
+    private val textPaint = Paint()
+
+    // State objects and values related to gesture tracking.
+
+    // Sets up gesture detectors, to handel multi-finger scale gestures.
+    private val mScaleGestureDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        /**
+         * This is the active focal point in terms of the viewport. Could be a local
+         * variable but kept here to minimize per-frame allocations.
+         */
+        private var prevSpan: Float = 0.0F
+
+        override fun onScaleBegin(scaleGestureDetector: ScaleGestureDetector): Boolean {
+            prevSpan = scaleGestureDetector.currentSpanX
+            return true
+        }
+
+        override fun onScale(scaleGestureDetector: ScaleGestureDetector): Boolean {
+            val span = scaleGestureDetector.currentSpanX
+
+            mViewportWidth = (prevSpan / span * mViewportWidth).toInt()
+            if (mViewportWidth > mViewportWidthMax) {
+                mViewportWidth = mViewportWidthMax
+            } else if (mViewportWidth < mViewportWidthMin) {
+                mViewportWidth = mViewportWidthMin
+            }
+            prevSpan = span
+
+            redraw()
+            showToast()
+            return true
+        }
+    })
+
+    // The gesture listener, used for handling simple gestures such as scrolls and flings.
+    private val mGestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(e: MotionEvent): Boolean {
+            releaseScroll()
+            redraw()
+            return true
+        }
+
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            if (e.x < mWidth / 4) {
+                scrollBy(-mWidth / 2)
+            } else if (e.x > mWidth * 3 / 4) {
+                scrollBy(mWidth / 2)
+            }
+            showToast()
+            return super.onSingleTapConfirmed(e)
+        }
+
+        override fun onDoubleTap(e: MotionEvent): Boolean {
+            val vpw = if (mViewportWidth > 24 * 60 * 60) {
+                mPosToast.setText("Time range : 24 hrs")
+                24 * 60 * 60
+            } else if (mViewportWidth > 60 * 60) {
+                mPosToast.setText("Time range : 1 hr")
+                60 * 60
+            } else if (mViewportWidth > 15 * 60) {
+                mPosToast.setText("Time range : 15 min")
+                15 * 60
+            } else {
+                mPosToast.setText("Time range : 24 hrs")
+                24 * 60 * 60
+            }
+            mPosToast.show()
+
+            val animator = ValueAnimator.ofInt(mViewportWidth, vpw)
+            animator.addUpdateListener { animation ->
+                viewportWidth = animation.animatedValue as Int
+                invalidate()
+            }
+            animator.start()
+
+            return super.onDoubleTap(e)
+        }
+
+        override fun onScroll(
+            e1: MotionEvent,
+            e2: MotionEvent,
+            distanceX: Float,
+            distanceY: Float
+        ): Boolean {
+            mPos += (distanceX * mViewportWidth.toFloat() / mWidth.toFloat()).toInt()
+
+            if (mPos < 0) {
+                mEdgeRight = false
+                mEdgeEffect.onPull(-distanceX)
+                mPos = 0
+            } else if (mPos > mPosRange) {
+                mEdgeRight = true
+                mEdgeEffect.onPull(distanceX)
+                mPos = mPosRange
+            }
+
+            redraw()
+            showToast()
+            postSeek()
+
+            return true
+        }
+
+        override fun onFling(
+            e1: MotionEvent,
+            e2: MotionEvent,
+            velocityX: Float,
+            velocityY: Float
+        ): Boolean {
+            fling((-velocityX).toInt())
+            return true
+        }
+    })
+
+    private val mScroller = OverScroller(context)
 
     init {
-
-        mDensity = context.resources.displayMetrics.density
-
-        // Sets up gesture detectors, to handel multi-finger scale gestures.
-        mScaleGestureDetector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-            /**
-             * This is the active focal point in terms of the viewport. Could be a local
-             * variable but kept here to minimize per-frame allocations.
-             */
-            private var prevSpan: Float = 0.0F
-
-            override fun onScaleBegin(scaleGestureDetector: ScaleGestureDetector): Boolean {
-                prevSpan = scaleGestureDetector.currentSpanX
-                return true
-            }
-
-            override fun onScale(scaleGestureDetector: ScaleGestureDetector): Boolean {
-                val span = scaleGestureDetector.currentSpanX
-
-                mViewportWidth = (prevSpan / span * mViewportWidth).toInt()
-                if (mViewportWidth > mViewportWidthMax) {
-                    mViewportWidth = mViewportWidthMax
-                } else if (mViewportWidth < mViewportWidthMin) {
-                    mViewportWidth = mViewportWidthMin
-                }
-                prevSpan = span
-
-                redraw()
-                showToast()
-                return true
-            }
-        })
-
-
-        // The gesture listener, used for handling simple gestures such as scrolls and flings.
-        mGestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean {
-                releaseScroll()
-                redraw()
-                return true
-            }
-
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                if (e.x < mWidth / 4) {
-                    scrollBy(-mWidth / 2)
-                } else if (e.x > mWidth * 3 / 4) {
-                    scrollBy(mWidth / 2)
-                }
-                showToast()
-                return super.onSingleTapConfirmed(e)
-            }
-
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                var vpw = 24 * 60 * 60
-                if (mViewportWidth > 24 * 60 * 60) {
-                    mPosToast.setText("Time range : 24 hrs")
-                } else if (mViewportWidth > 60 * 60) {
-                    vpw = 60 * 60
-                    mPosToast.setText("Time range : 1 hr")
-                } else if (mViewportWidth > 15 * 60) {
-                    vpw = 15 * 60
-                    mPosToast.setText("Time range : 15 min")
-                } else {
-                    mPosToast.setText("Time range : 24 hrs")
-                }
-                mPosToast.show()
-
-                val animator = ValueAnimator.ofInt(mViewportWidth, vpw)
-                animator.addUpdateListener { animation ->
-                    viewportWidth = animation.animatedValue as Int
-                    invalidate()
-                }
-                animator.start()
-
-                return super.onDoubleTap(e)
-            }
-
-            override fun onScroll(
-                e1: MotionEvent,
-                e2: MotionEvent,
-                distanceX: Float,
-                distanceY: Float
-            ): Boolean {
-                mPos += (distanceX * mViewportWidth.toFloat() / mWidth.toFloat()).toInt()
-
-                if (mPos < 0) {
-                    mEdgeRight = false
-                    mEdgeEffect.onPull(-distanceX)
-                    mPos = 0
-                } else if (mPos > mPosRange) {
-                    mEdgeRight = true
-                    mEdgeEffect.onPull(distanceX)
-                    mPos = mPosRange
-                }
-
-                redraw()
-                showToast()
-                postSeek()
-
-                return true
-            }
-
-            override fun onFling(
-                e1: MotionEvent,
-                e2: MotionEvent,
-                velocityX: Float,
-                velocityY: Float
-            ): Boolean {
-                fling((-velocityX).toInt())
-                return true
-            }
-        })
-
-        mScroller = OverScroller(context)
-
         // set Max/Min time
         mPosMin = dateToMillis(20000000) / 1000
 
@@ -205,12 +203,10 @@ class TimeBar @JvmOverloads constructor(
 
         mPosToast.setGravity(Gravity.CENTER, 0, 0)
 
-        // allocate color paint for L/N color bar
-        nColorPaint = Paint()
-        nColorPaint.color = context.resources.getColor(R.color.timebar_ncolor)
-        lColorPaint = Paint()
-        lColorPaint.color = context.resources.getColor(R.color.timebar_lcolor)
-
+        // label paint
+        textPaint.isAntiAlias = true
+        textPaint.textSize = 20f
+        textPaint.textAlign = Paint.Align.CENTER
     }
 
     private var mScrollStartPos: Int = 0
@@ -340,6 +336,9 @@ class TimeBar @JvmOverloads constructor(
         super.onSizeChanged(w, h, oldw, oldh)
         mWidth = w
         mHeight = h
+
+        // also change label text size
+        textPaint.textSize = (mHeight / 2).toFloat()
     }
 
     private fun PosToX(pos: Int): Int {
@@ -357,11 +356,8 @@ class TimeBar @JvmOverloads constructor(
         val posEnd = XToPos(mWidth)
         var i: Int
 
-        val p = Paint()
         // background, auto draw "timebar.png"
-
         val clipx = (mDensity * 8).toInt()
-
         canvas.clipRect(clipx, clipx, mWidth - clipx, mHeight - clipx)
 
         // draw clip bar
@@ -388,19 +384,20 @@ class TimeBar @JvmOverloads constructor(
         calendar.set(Calendar.MONTH, m)
         calendar.set(Calendar.DATE, d)
 
+        colorPaint.color = nColor
         while (date <= enddate) {
-            var clipList: IntArray?
             val posofday = (calendar.timeInMillis / 1000 - mPosMin).toInt()
 
             // draw N clips info
-            clipList = mClipInfo[date]
+            var clipList:IntArray? = mClipInfo[date]
             if (clipList == null) {
-                if (mUiHandler != null) {
-                    mUiHandler!!.obtainMessage(MSG_TB_GETCLIPLIST, date, 0)
+                if (uiHandler != null) {
+                    uiHandler!!.obtainMessage(MSG_TB_GETCLIPLIST, date, 0)
                         .sendToTarget()
-                    mClipInfo.append(date, IntArray(0))  // to indicate get clip request sent
+                    mClipInfo.put(date, IntArray(0))  // to indicate get clip request sent
                 }
-            } else if (clipList.size > 0) {
+            }
+            else if (clipList.isNotEmpty() ) {
                 /*
                 int l = clipList.length ;
                 for( i=0; i<l; i+=2) {
@@ -412,7 +409,7 @@ class TimeBar @JvmOverloads constructor(
                     if( sx >= mWidth ) {
                         break ;
                     }
-                    canvas.drawRect( (float)sx, 2.0f, (float)(ex+2), (float)(mHeight-2), nColorPaint );
+                    canvas.drawRect( (float)sx, 2.0f, (float)(ex+2), (float)(mHeight-2), colorPaint );
                 }
                 */
                 val l = clipList.size
@@ -441,7 +438,7 @@ class TimeBar @JvmOverloads constructor(
                                 2.0f,
                                 (pex + 2).toFloat(),
                                 (mHeight - 2).toFloat(),
-                                nColorPaint
+                                colorPaint
                             )
                         }
                         pex = ex
@@ -460,13 +457,14 @@ class TimeBar @JvmOverloads constructor(
                         2.0f,
                         (pex + 2).toFloat(),
                         (mHeight - 2).toFloat(),
-                        nColorPaint
+                        colorPaint
                     )
                 }
             }
 
 
             // draw L clips info
+            colorPaint.color = lColor
             clipList = mLockInfo[date]
             if (clipList != null && clipList.size > 1) {
                 val l = clipList.size
@@ -495,7 +493,7 @@ class TimeBar @JvmOverloads constructor(
                                 2.0f,
                                 (pex + 2).toFloat(),
                                 (mHeight - 2).toFloat(),
-                                lColorPaint
+                                colorPaint
                             )
                         }
                         pex = ex
@@ -514,7 +512,7 @@ class TimeBar @JvmOverloads constructor(
                         2.0f,
                         (pex + 2).toFloat(),
                         (mHeight - 2).toFloat(),
-                        lColorPaint
+                        colorPaint
                     )
                 }
             }
@@ -527,10 +525,7 @@ class TimeBar @JvmOverloads constructor(
 
 
         // Draw time grid
-        val labelTextPaint = Paint()
-        labelTextPaint.isAntiAlias = true
-        labelTextPaint.textSize = (mHeight / 2).toFloat()
-        val labelWidth = labelTextPaint.measureText("00-00  ").toInt()
+        val labelWidth = textPaint.measureText("00-00  ").toInt()
         val maxLabels = mWidth / labelWidth
 
         var gridWidth = (posEnd - posStart) / maxLabels
@@ -554,33 +549,30 @@ class TimeBar @JvmOverloads constructor(
             gridWidth = (gridWidth / (24 * 60 * 60) + 1) * 24 * 60 * 60
         }
 
-        labelTextPaint.textAlign = Paint.Align.CENTER
         val sdf = SimpleDateFormat(format, Locale.US)
-
-        val descent = labelTextPaint.descent()
+        val descent = textPaint.descent()
         val textY = (mHeight / 2 + 10).toFloat()
         val markY = textY + descent
 
-        p.color = -0x1000000
+        colorPaint.color = 0xff000000.toInt()
         var pos = posStart - posStart % gridWidth
         while (pos < posEnd + gridWidth) {
             calendar.timeInMillis = (mPosMin + pos) * 1000L
             val text = sdf.format(calendar.time)
             val x = PosToX(pos)
-            canvas.drawText(text, x.toFloat(), textY, labelTextPaint)
-            canvas.drawLine(x.toFloat(), markY, x.toFloat(), (mHeight - clipx).toFloat(), p)
+            canvas.drawText(text, x.toFloat(), textY, textPaint)
+            canvas.drawLine(x.toFloat(), markY, x.toFloat(), (mHeight - clipx).toFloat(), colorPaint)
             pos += gridWidth
-            //canvas.drawRect( (float)(x-1), (float)(mHeight-20), (float)(x+1), (float)(mHeight-4), p );
+            //canvas.drawRect( (float)(x-1), (float)(mHeight-20), (float)(x+1), (float)(mHeight-4), gridPaint );
         }
 
         // draw center indicator
-        p.color = -0x1
+        colorPaint.color = -1
         val dw = mDensity * 2
-        canvas.drawRect(mWidth / 2 - dw, dw, mWidth / 2 + dw, mHeight - dw, p)
+        canvas.drawRect(mWidth / 2 - dw, dw, mWidth / 2 + dw, mHeight - dw, colorPaint)
 
 
         // draw Edge Effect
-
         if (!mEdgeEffect.isFinished) {
             canvas.save()
             if (mEdgeRight) {
@@ -603,9 +595,8 @@ class TimeBar @JvmOverloads constructor(
         postInvalidateOnAnimation()
     }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-
-        val act = event.actionMasked
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        val act = event?.actionMasked
         if (act == MotionEvent.ACTION_DOWN) {
             mTouch = true
         } else if (act == MotionEvent.ACTION_UP) {
@@ -685,10 +676,6 @@ class TimeBar @JvmOverloads constructor(
         }
     }
 
-    fun setUiHandler(handler: Handler) {
-        mUiHandler = handler
-    }
-
     // set time bar date range
     // parameter:
     //    startDate, starting date of time bar, in bcd : yyyyMMDD
@@ -703,9 +690,9 @@ class TimeBar @JvmOverloads constructor(
 
     private fun postSeek() {
         isSeekPending = true
-        if (mUiHandler != null) {
-            mUiHandler!!.removeMessages(MSG_TB_SCROLL)
-            mUiHandler!!.sendEmptyMessageDelayed(MSG_TB_SCROLL, 200)
+        if (uiHandler != null) {
+            uiHandler!!.removeMessages(MSG_TB_SCROLL)
+            uiHandler!!.sendEmptyMessageDelayed(MSG_TB_SCROLL, 200)
         }
     }
 

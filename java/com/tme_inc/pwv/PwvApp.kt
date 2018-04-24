@@ -126,7 +126,7 @@ class PwvApp : Application() {
             prefEdit.putString("aid", aid)
         }
 
-        prefEdit.commit()
+        prefEdit.apply()
 
         val ffpath = applicationContext.getFileStreamPath("ffmpeg")
         if (!ffpath.exists() || !ffpath.canExecute()) {

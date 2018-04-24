@@ -1,8 +1,6 @@
 package com.tme_inc.pwv
 
 import android.content.Intent
-import android.content.SharedPreferences
-import android.graphics.SurfaceTexture
 import android.os.Bundle
 import android.os.Handler
 import android.os.Message
@@ -14,6 +12,7 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import kotlinx.android.synthetic.main.activity_liveview.*
 import java.util.Scanner
 
 class Liveview : PwViewActivity() {
@@ -56,8 +55,8 @@ class Liveview : PwViewActivity() {
     private var m_diskwaringflash = false   // to flash message
 
     internal var xappmod = 0
-    internal var pwStatusListener : (Bundle) -> Unit = { result:Bundle ->
-        var i: Int
+
+    private var pwStatusListener = fun( result: Bundle) {
         mStatusTime = 0
         val pwStatus = result.getByteArray("PWStatus")
         if (pwStatus != null) {
@@ -67,83 +66,79 @@ class Liveview : PwViewActivity() {
             i2 = -1
 
             // update Rec icons
-            i = 0
-            while (i < 8) {
-                val recIcon = findViewById<View>(m_RecId[i]) as ImageView
-                if (recIcon == null) {
-                    i++
-                    continue
-                }
-                if (i < pwStatus.size) {
-                    val iStatus = pwStatus[i].toInt()
-                    if (iStatus.toInt() and 4 != 0) {
-                        recIcon.setImageResource(m_RecImage[i])
-                    } else {
-                        recIcon.setImageResource(m_NoRecImage[i])
-                    }
-                    recIcon.visibility = View.VISIBLE
+            for( i in m_RecId.indices ) {
+                val recIcon= findViewById<ImageView>(m_RecId[i])
+                if (recIcon != null) {
+                    if (i < pwStatus.size) {
+                        val iStatus = pwStatus[i].toInt()
+                        if (iStatus and 4 != 0) {
+                            recIcon.setImageResource(m_RecImage[i])
+                        } else {
+                            recIcon.setImageResource(m_NoRecImage[i])
+                        }
+                        recIcon.visibility = View.VISIBLE
 
-                    val forcechannel = iStatus shr 4 and 3
-                    if (i1 < 0) {
-                        if (forcechannel == 0)
-                            i1 = i
+                        val forcechannel = iStatus shr 4 and 3
+                        if (i1 < 0) {
+                            if (forcechannel == 0)
+                                i1 = i
+                        }
+                        if (i2 < 0) {
+                            if (forcechannel == 1)
+                                i2 = i
+                        }
                     }
-                    if (i2 < 0) {
-                        if (forcechannel == 1)
-                            i2 = i
+                    else {
+                        recIcon.visibility = View.INVISIBLE
                     }
-                } else {
-                    recIcon.visibility = View.INVISIBLE
                 }
-                i++
             }
 
             // update PAN/BACK button image
-            if (findViewById<View>(R.id.pwcontrol).visibility == View.VISIBLE) {     // button bar visible?
+            if (pwcontrol.visibility == View.VISIBLE) {     // button bar visible?
                 var rec: Boolean
                 var frec: Boolean
 
-                var button_cam = findViewById<View>(R.id.button_cam1) as ImageButton
+                // var button_cam = findViewById<View>(R.id.button_cam1) as ImageButton
                 if (i1 >= 0) {
                     val iStatus = pwStatus[i1].toInt()
                     rec = iStatus and 4 != 0
                     frec = iStatus and 8 != 0
                     if (rec == frec) {
                         if (rec) {
-                            button_cam.setImageResource(R.drawable.pw_cam1_light)
+                            button_cam1.setImageResource(R.drawable.pw_cam1_light)
                         } else {
-                            button_cam.setImageResource(R.drawable.pw_cam1)
+                            button_cam1.setImageResource(R.drawable.pw_cam1)
                         }
                     } else {
-                        button_cam.setImageResource(R.drawable.pw_cam1_trans)
+                        button_cam1.setImageResource(R.drawable.pw_cam1_trans)
                     }
                 } else {
-                    button_cam.setImageResource(R.drawable.pw_cam1)
+                    button_cam1.setImageResource(R.drawable.pw_cam1)
                 }
 
-                button_cam = findViewById<View>(R.id.button_cam2) as ImageButton
                 if (i2 >= 0) {
                     val iStatus = pwStatus[i2].toInt()
                     rec = iStatus and 4 != 0
                     frec = iStatus and 8 != 0
                     if (rec == frec) {
                         if (rec) {
-                            button_cam.setImageResource(R.drawable.pw_cam2_light)
+                            button_cam2.setImageResource(R.drawable.pw_cam2_light)
                         } else {
-                            button_cam.setImageResource(R.drawable.pw_cam2)
+                            button_cam2.setImageResource(R.drawable.pw_cam2)
                         }
                     } else {
-                        button_cam.setImageResource(R.drawable.pw_cam2_trans)
+                        button_cam2.setImageResource(R.drawable.pw_cam2_trans)
                     }
                 } else {
-                    button_cam.setImageResource(R.drawable.pw_cam2)
+                    button_cam2.setImageResource(R.drawable.pw_cam2)
                 }
             }
         }
 
         var msg = ""
         val DiskInfo = result.getString("DiskInfo", "")
-        val di = DiskInfo.split("\n")
+        val di = DiskInfo.split("\n").dropLastWhile { it.isEmpty() }
 
         var flashing = false   // to flash message
         // disk info:   idx,mounted,totalspace,freespace,full,llen,nlen
@@ -249,12 +244,12 @@ class Liveview : PwViewActivity() {
                 diskl1 = true
             }
 
-            if (flashing && m_diskwaringflash) {
-                (findViewById<View>(R.id.disk1msg) as TextView).text = ""
-            } else {
-                (findViewById<View>(R.id.disk1msg) as TextView).text = msg
-            }
-            (findViewById<View>(R.id.disk1msg) as TextView).setTextColor(msgcolor)
+            disk1msg.text = if (flashing && m_diskwaringflash)
+                ""
+            else
+                msg
+
+            disk1msg.setTextColor(msgcolor)
         }
 
         /// DISPLAY DISK2
@@ -320,19 +315,19 @@ class Liveview : PwViewActivity() {
 
             if (d1avail) msg = ""
 
-            if (flashing && m_diskwaringflash) {
-                (findViewById<View>(R.id.disk2msg) as TextView).text = ""
-            } else {
-                (findViewById<View>(R.id.disk2msg) as TextView).text = msg
-            }
-            (findViewById<View>(R.id.disk2msg) as TextView).setTextColor(msgcolor)
+            disk2msg.text  = if (flashing && m_diskwaringflash)
+                ""
+            else
+                msg
+
+            disk2msg.setTextColor(msgcolor)
         }
 
         if (appmode >= 2 && (diskl1 || diskl2)) {
             // remove msg2
-            (findViewById<View>(R.id.disk2msg) as TextView).text = ""
+            disk2msg.text = ""
             msgcolor = resources.getColor(R.color.diskmsg_white)
-            (findViewById<View>(R.id.disk1msg) as TextView).setTextColor(msgcolor)
+            disk1msg.setTextColor(msgcolor)
 
             msg = "Video available on "
             if (diskl1) {
@@ -343,7 +338,7 @@ class Liveview : PwViewActivity() {
                 msg += "DISK2"
             }
             msg += " !"
-            (findViewById<View>(R.id.disk1msg) as TextView).text = msg
+            disk1msg.text = msg
 
         }
     }
@@ -355,9 +350,7 @@ class Liveview : PwViewActivity() {
         // setup player screen
         setupScreen()
 
-        var button: ImageButton
-        button = findViewById<View>(R.id.button_tag) as ImageButton
-        button.setOnClickListener {
+        button_tag.setOnClickListener {
             //TagEventDialog tagDialog = new TagEventDialog();
             //tagDialog.show(getFragmentManager(), "tagTagEvent");
             savePref()
@@ -369,8 +362,7 @@ class Liveview : PwViewActivity() {
             startActivity(intent)
         }
 
-        button = findViewById<View>(R.id.button_covert) as ImageButton
-        button.setOnClickListener {
+        button_covert.setOnClickListener {
             m_covertmode = true
 
             mPwProtocol!!.SetCovertMode(true)
@@ -380,71 +372,61 @@ class Liveview : PwViewActivity() {
             startActivity(intent)
         }
 
-        button = findViewById<View>(R.id.button_officer) as ImageButton
-        button.setOnClickListener {
+        button_officer.setOnClickListener {
             val officerIdDialog = OfficerIdDialog()
             officerIdDialog.show(fragmentManager, "tagOfficerId")
         }
 
-        button = findViewById<View>(R.id.button_cam1) as ImageButton
-        button.setOnClickListener { v ->
+        button_cam1.setOnClickListener {
             mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_C1_DOWN, {})
-            (v as ImageButton).setImageResource(R.drawable.pw_cam1_trans)
+            (it as ImageButton).setImageResource(R.drawable.pw_cam1_trans)
             mStatusTime = 0
         }
-        button = findViewById<View>(R.id.button_cam2) as ImageButton
-        button.setOnClickListener { v ->
+
+        button_cam2.setOnClickListener {
             mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_C2_DOWN, {})
-            (v as ImageButton).setImageResource(R.drawable.pw_cam2_trans)
+            (it as ImageButton).setImageResource(R.drawable.pw_cam2_trans)
             mStatusTime = 0
         }
-        button = findViewById<View>(R.id.button_tm) as ImageButton
-        button.setOnClickListener {
+
+        button_tm.setOnClickListener {
             mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_TM_DOWN, {})
             mStatusTime = 0
         }
-        button = findViewById<View>(R.id.button_lp) as ImageButton
-        button.setOnClickListener { v ->
-            val bt = v as ImageButton
-            var selected = bt.isSelected
-            bt.isSelected = !selected
-            selected = bt.isSelected
+
+        button_lp.setOnClickListener {
+            var selected = (it as ImageButton).isSelected
+            it.isSelected = !selected
+            selected = (it as ImageButton).isSelected
 
             if (selected) {
-                mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_LP_DOWN, {})
-                m_UIhandler!!.sendEmptyMessageDelayed(MSG_PW_LPOFF, 5000)
+                mPwProtocol.SendPWKey(PWProtocol.PW_VK_LP_DOWN, {})
+                m_UIhandler?.sendEmptyMessageDelayed(MSG_PW_LPOFF, 5000)
             } else {
-                m_UIhandler!!.removeMessages(MSG_PW_LPOFF)
-                mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_LP_UP)
+                m_UIhandler?.removeMessages(MSG_PW_LPOFF)
+                mPwProtocol.SendPWKey(PWProtocol.PW_VK_LP_UP)
             }
 
             mStatusTime = 0
         }
 
-        button = findViewById<View>(R.id.btPlayMode) as ImageButton
-        button.setOnClickListener {
+        btPlayMode.setOnClickListener {
             val intent = Intent(baseContext, Playback::class.java)
             startActivity(intent)
             finish()
         }
 
-        m_UIhandler = object : Handler() {
-            override fun handleMessage(msg: Message) {
-                super.handleMessage(msg)
-
-                if (msg.what == MSG_UI_HIDE) {
-                    hideUI()
-                } else if (msg.what == MSG_PW_LPOFF) {
-                    val button = findViewById<View>(R.id.button_lp) as ImageButton
-                    val selected = button.isSelected
-                    if (selected) {
-                        button.isSelected = false
-                        mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_LP_UP)
-                    }
+        m_UIhandler = Handler({ msg:Message ->
+            if (msg.what == MSG_UI_HIDE) {
+                hideUI()
+            } else if (msg.what == MSG_PW_LPOFF) {
+                if ( button_lp.isSelected ) {
+                    button_lp.isSelected = false
+                    mPwProtocol?.SendPWKey(PWProtocol.PW_VK_LP_UP)
                 }
             }
-        }
-
+            true
+        })
     }
 
     override fun onResume() {
@@ -454,14 +436,14 @@ class Liveview : PwViewActivity() {
         val prefs = getSharedPreferences("pwv", 0)
         val useLogin = prefs.getBoolean("login", false)
         val officerId = prefs.getString("officerId", "")
-        if (!useLogin && officerId!!.length > 0) {
+        if (!useLogin && officerId.isNotBlank()) {
             mPwProtocol!!.SetOfficerId(officerId)
         }
 
         // save live screen active flag
-        val prefEdit = prefs.edit()
-        prefEdit.putBoolean("live", true)           // stop using remote login on launch
-        prefEdit.commit()
+        prefs.edit()
+            .putBoolean("live", true)           // stop using remote login on launch
+            .apply()
 
         if (m_covertmode) {
             m_covertmode = false
@@ -483,24 +465,19 @@ class Liveview : PwViewActivity() {
             mstream = PWLiveStream(m_channel)
             mstream!!.start()
             m_loading = true
-            findViewById<View>(R.id.loadingBar).visibility = View.VISIBLE
-            (findViewById<View>(R.id.loadingText) as TextView).text = "Loading..."
-            findViewById<View>(R.id.loadingText).visibility = View.VISIBLE
-
-            // clear OSD ;
-            for (iosd in m_osd) {
-                iosd?.text = ""
-                iosd?.visibility = View.INVISIBLE
-            }
+            loadingBar.visibility = View.VISIBLE
+            loadingText.text = "Loading..."
+            loadingText.visibility = View.VISIBLE
             return
-        } else if (mplayer == null) {
+        }
+        else if (mplayer == null) {
             val cn = mstream!!.channelName
             if (cn != null)
-                (findViewById<View>(R.id.loadingText) as TextView).text = cn
+                loadingText.text = cn
             if (mstream!!.videoAvailable()) {
                 m_totalChannel = mstream!!.totalChannels
                 //startActivity(new Intent(getBaseContext(), Playback.class));
-                val textureView = findViewById<View>(R.id.liveScreen) as TextureView
+                val textureView = liveScreen
                 if (textureView != null && textureView.isAvailable) {
                     val surface = textureView.surfaceTexture
                     if (surface != null && mstream!!.resolution >= 0) {
@@ -537,8 +514,8 @@ class Liveview : PwViewActivity() {
             if (vts <= ats || ats == 0L) {
                 if (mplayer!!.popOutput(true)) {
                     if (m_loading) {
-                        findViewById<View>(R.id.loadingBar).visibility = View.INVISIBLE
-                        findViewById<View>(R.id.loadingText).visibility = View.INVISIBLE
+                        loadingBar.visibility = View.INVISIBLE
+                        loadingText.visibility = View.INVISIBLE
                         m_loading = false
                     }
                 }
@@ -572,10 +549,6 @@ class Liveview : PwViewActivity() {
         return super.onCreateOptionsMenu(menu)
     }
 
-    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        return super.onPrepareOptionsMenu(menu)
-    }
-
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
@@ -595,14 +568,12 @@ class Liveview : PwViewActivity() {
             return true
         } else if (id == R.id.device_setup) {
             mPwProtocol!!.GetWebUrl { result ->
-                if (result != null) {
-                    val url = result.getString("URL")
-                    if (url != null) {
-                        val intent = Intent(baseContext, PwWebView::class.java)
-                        intent.putExtra("URL", url + "login.html")
-                        intent.putExtra("TITLE", "Device Setup")
-                        startActivity(intent)
-                    }
+                val url = result.getString("URL")
+                if (url != null) {
+                    val intent = Intent(baseContext, PwWebView::class.java)
+                    intent.putExtra("URL", url + "login.html")
+                    intent.putExtra("TITLE", "Device Setup")
+                    startActivity(intent)
                 }
             }
         } else if (id == R.id.video_archive) {

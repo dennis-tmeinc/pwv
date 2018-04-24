@@ -1,7 +1,6 @@
 package com.tme_inc.pwv
 
 import android.app.Activity
-import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -9,11 +8,13 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ImageButton
 import android.widget.Spinner
+import kotlinx.android.synthetic.main.activity_tag_event.*
 
 import java.util.Arrays
 import java.util.Calendar
+import kotlin.math.max
+import kotlin.math.min
 
 class TagEvent : Activity() {
 
@@ -46,38 +47,35 @@ class TagEvent : Activity() {
         setContentView(R.layout.activity_tag_event)
 
         // init incident list
-        var spinner: Spinner?
-        spinner = findViewById<View>(R.id.tag_incident) as Spinner
-        if (spinner != null) {
-            val adapter = ArrayAdapter.createFromResource(
-                this,
-                R.array.tag_incident_list, android.R.layout.simple_spinner_item
-            )
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            spinner.adapter = adapter
-        }
+        var adapter = ArrayAdapter.createFromResource(
+            this,
+            R.array.tag_incident_list, android.R.layout.simple_spinner_item
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        tag_incident.adapter = adapter
 
         // init priority list
-        spinner = findViewById<View>(R.id.tag_priority) as Spinner
-        if (spinner != null) {
-            val adapter = ArrayAdapter.createFromResource(
-                this,
-                R.array.tag_priority_list, android.R.layout.simple_spinner_item
-            )
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            spinner.adapter = adapter
-        }
+        adapter = ArrayAdapter.createFromResource(
+            this,
+            R.array.tag_priority_list, android.R.layout.simple_spinner_item
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        tag_priority.adapter = adapter
 
         // init PW event processor
         //
         mPwProtocol = PWProtocol()
-        mPwProtocol!!.GetVri { result -> onTagPWEvent(result) }
+        mPwProtocol!!.GetVri {
+            onTagPWEvent(it)
+        }
 
-        var button = findViewById<View>(R.id.button_tag) as Button
-        button.setOnClickListener { onTagEventClick() }
+        button_tag.setOnClickListener {
+            onTagEventClick()
+        }
 
-        button = findViewById<View>(R.id.button_cancel) as Button
-        button.setOnClickListener { onCancelClick() }
+        button_cancel.setOnClickListener {
+            finish()
+        }
 
     }
 
@@ -92,10 +90,7 @@ class TagEvent : Activity() {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
-        val id = item.itemId
-
-
-        return if (id == R.id.action_settings) {
+        return if (item.itemId == R.id.action_settings) {
             true
         } else super.onOptionsItemSelected(item)
 
@@ -139,7 +134,6 @@ class TagEvent : Activity() {
             val VriSize = result.getInt("VriListSize", 0)
             val VriList = result.getByteArray("VriList")
             if (VriSize > 0 && VriItemSize > 0 && VriList != null) {
-                var offset = 0
 
                 val searchdatetime = (DvrDate - 20000000) * 10000 + DvrTime / 100
                 //search for current index
@@ -147,58 +141,59 @@ class TagEvent : Activity() {
                 var vr_pi = 0
                 var vr_n: Long = 0
                 var vr_ni = 0
-                var o: Int
+
+                // extension of vri
+                fun ByteArray.getVriItem(offset: Int, len: Int ) : String {
+                    return String(
+                        this,
+                        offset,
+                        len
+                    ).split("\u0000")[0].trim()
+                }
 
                 // Search matching vri
-                o = 0
-                while (o < VriSize * VriItemSize) {
+                var offset = 0
+                while (offset < VriSize * VriItemSize) {
 
                     // VRI time
                     var vridatetime: Long = getVriTime( String(
                         VriList,
-                        o,
+                        offset,
                         64
                     ))
 
                     if (vridatetime <= searchdatetime) {
                         if (vr_p == 0L) {
                             vr_p = vridatetime
-                            vr_pi = o
+                            vr_pi = offset
                         } else if (vridatetime > vr_p) {
                             vr_p = vridatetime
-                            vr_pi = o
+                            vr_pi = offset
                         }
                     } else {
                         if (vr_n == 0L) {
                             vr_n = vridatetime
-                            vr_ni = o
+                            vr_ni = offset
                         } else if (vridatetime < vr_n) {
                             vr_n = vridatetime
-                            vr_ni = o
+                            vr_ni = offset
                         }
                     }
-                    o += VriItemSize
+                    offset += VriItemSize
                 }
 
-                if (vr_p != 0L) {
-                    o = vr_pi
+                offset = if (vr_p != 0L) {
+                    vr_pi
                 } else if (vr_n != 0L) {
-                    o = vr_ni
+                    vr_ni
                 } else {
-                    o = 0
+                    0
                 }
-
-
-                offset = o
 
                 var OfficerId = ""
-                var str = String(
-                    VriList,
-                    offset,
-                    64
-                ).split("\u0000")[0].trim()
-                val eVri = findViewById<View>(R.id.tag_vri) as EditText
-                eVri?.setText(str)
+
+                var str = VriList.getVriItem(offset, 64)
+                tag_vri.setText(str)
                 // splite officer ID from vri
                 val strarray = str.split("-")
                 if (strarray.size > 2) {
@@ -206,65 +201,42 @@ class TagEvent : Activity() {
                 }
                 offset += 64
 
+                var apos = 0
+
                 // incident classification
-                str = String(
-                    VriList,
-                    offset,
-                    32
-                ).split("\u0000")[0].trim()
-                val sIncident = findViewById<View>(R.id.tag_incident) as Spinner
-                if (sIncident != null) {
-                    val adapter = sIncident.adapter as ArrayAdapter<CharSequence>
-                    val pos = adapter.getPosition(str)
-                    if (pos < 0) {
-                        //                                    adapter.add(str);
-                        //                                    pos = adapter.getPosition(str);
-                    }
-                    sIncident.setSelection(pos)
+                str = VriList.getVriItem(offset, 32)
+                val incident_adapter = tag_incident.adapter as ArrayAdapter<CharSequence>
+                apos = incident_adapter.getPosition(str)
+                if (apos < 0) {
+                    //                                    adapter.add(str);
+                    //                                    pos = adapter.getPosition(str);
+                    apos = 0
                 }
+                tag_incident.setSelection(apos)
                 offset += 32
 
                 // case number
-                str = String(
-                    VriList,
-                    offset,
-                    64
-                ).split("\u0000")[0].trim()
-                val eCase = findViewById<View>(R.id.tag_casenumber) as EditText
-                eCase?.setText(str)
+                tag_casenumber.setText(VriList.getVriItem(offset, 64))
                 offset += 64
 
                 // Priority
-                str = String(
-                    VriList,
-                    offset,
-                    20
-                ).split("\u0000")[0].trim()
-                val sPrio = findViewById<View>(R.id.tag_priority) as Spinner
-                if (sPrio != null) {
-                    val adapter = sPrio.adapter as ArrayAdapter<CharSequence>
-                    val pos = adapter.getPosition(str)
-                    if (pos < 0) {
-                        //                                    adapter.add(str);
-                        //                                    pos = adapter.getPosition(str);
-                    }
-                    sPrio.setSelection(pos)
+                str = VriList.getVriItem(offset, 20)
+                val prio_adapter = tag_priority.adapter as ArrayAdapter<CharSequence>
+                apos = prio_adapter.getPosition(str)
+                if (apos < 0) {
+                    //                                    adapter.add(str);
+                    //                                    pos = adapter.getPosition(str);
+                    apos = 0
                 }
+                tag_priority.setSelection(apos)
                 offset += 20
 
                 // Officer ID
-                val eOfficerId = findViewById<View>(R.id.tag_officerid) as EditText
-                eOfficerId?.setText(OfficerId)
+                tag_officerid.setText(OfficerId)
                 offset += 32    // skip officer ID
 
                 // Notes
-                str = String(
-                    VriList,
-                    offset,
-                    255
-                ).split("\u0000")[0].trim()
-                val eNotes = findViewById<View>(R.id.tag_notes) as EditText
-                eNotes?.setText(str)
+                tag_notes.setText(VriList.getVriItem(offset, 255))
 
             }
 
@@ -272,69 +244,38 @@ class TagEvent : Activity() {
         return
     }
 
-    protected fun onTagEventClick() {
+    private fun onTagEventClick() {
         if (VriItemSize > 0) {
-            val vri = ByteArray(VriItemSize)
-            Arrays.fill(vri, ' '.toByte())
+            val vri = ByteArray(VriItemSize) {
+                ' '.toByte()
+            }
 
-            var str: String
-            var len: Int
+            fun ByteArray.setVriItem( sData : String, offset: Int, len: Int) : Int {
+                val bData = sData.toByteArray()
+                val blen = min( bData.size, len )
+                System.arraycopy(bData, 0, this, offset, blen)
+                return len
+            }
+
             var offset = 0
 
             // Vri
-            val eVri = findViewById<View>(R.id.tag_vri) as EditText
-            if (eVri != null) {
-                val bVri = eVri.text.toString().toByteArray()
-                len = bVri.size
-                if (len > 64) len = 64
-                System.arraycopy(bVri, 0, vri, offset, len)
-            }
-            offset += 64
+            offset += vri.setVriItem(tag_vri.text.toString(), offset, 64)
 
             // incident classification
-            val sIncident = findViewById<View>(R.id.tag_incident) as Spinner
-            if (sIncident != null) {
-                str = sIncident.selectedItem as String
-                val bIncident = str.toByteArray()
-                len = bIncident.size
-                if (len > 32) len = 32
-                System.arraycopy(bIncident, 0, vri, offset, len)
-            }
-            offset += 32
+            offset += vri.setVriItem(tag_incident.selectedItem as String, offset, 32)
 
             // case number
-            val eCase = findViewById<View>(R.id.tag_casenumber) as EditText
-            if (eCase != null) {
-                val bCase = eCase.text.toString().toByteArray()
-                len = bCase.size
-                if (len > 64) len = 64
-                System.arraycopy(bCase, 0, vri, offset, len)
-            }
-            offset += 64
+            offset += vri.setVriItem(tag_casenumber.text.toString(), offset, 64)
 
             // Priority
-            val sPrio = findViewById<View>(R.id.tag_priority) as Spinner
-            if (sPrio != null) {
-                str = sPrio.selectedItem as String
-                val bPrio = str.toByteArray()
-                len = bPrio.size
-                if (len > 20) len = 20
-                System.arraycopy(bPrio, 0, vri, offset, len)
-            }
-            offset += 20
+            offset += vri.setVriItem(tag_priority.selectedItem.toString(), offset, 20)
 
             // Officer ID
             offset += 32    // skip officer ID
 
             // Notes
-            val eNotes = findViewById<View>(R.id.tag_notes) as EditText
-            if (eNotes != null) {
-                val bNotes = eNotes.text.toString().toByteArray()
-                len = bNotes.size
-                val maxlen = VriItemSize - offset
-                if (len > maxlen) len = maxlen
-                System.arraycopy(bNotes, 0, vri, offset, len)
-            }
+            vri.setVriItem(tag_notes.text.toString(), offset, VriItemSize - offset)
 
             // set VRI
             if (mPwProtocol != null) {
@@ -342,10 +283,6 @@ class TagEvent : Activity() {
             }
 
         }
-        finish()
-    }
-
-    protected fun onCancelClick() {
         finish()
     }
 

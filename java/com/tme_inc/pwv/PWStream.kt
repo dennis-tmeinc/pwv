@@ -35,7 +35,7 @@ open class PWStream(channel: Int) {
 
     private var file_encrypted: Boolean = false
 
-    var audio_codec: Short = 1
+    var audio_codec = 1
     var audio_samplerate = 8000
 
     var totalChannels = 0               // total channel
@@ -294,7 +294,7 @@ open class PWStream(channel: Int) {
 
         val bo = frame.order()
         frame.order(ByteOrder.LITTLE_ENDIAN)
-        audio_codec = frame.getShort(pos + 12)
+        audio_codec = frame.getShort(pos + 12).toInt()
         audio_samplerate = frame.getInt(pos + 16)
         devicetype = frame.getShort(pos + 6).toInt()
         video_width = frame.getShort(pos + 24).toInt()

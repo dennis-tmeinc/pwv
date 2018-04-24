@@ -36,6 +36,7 @@ import android.widget.RelativeLayout
 import android.widget.Scroller
 import android.widget.TextView
 import kotlinx.android.synthetic.main.activity_liveview.*
+import org.w3c.dom.Text
 
 import java.io.UnsupportedEncodingException
 import java.nio.charset.Charset
@@ -46,23 +47,22 @@ import java.util.Scanner
  */
 open class PwViewActivity : Activity() {
 
-    protected var m_screenLandscape = false
-    protected var m_screendensity: Float = 0.toFloat()
+    protected var m_screendensity = 0f
 
-    protected var m_channel: Int = 0
-    protected var m_totalChannel: Int = 0
+    protected var m_channel = 0
+    protected var m_totalChannel = 0
 
     // network connecting mode
-    protected var m_connMode: Int = 0
+    protected var m_connMode = 0
 
-    protected var m_screen: ViewGroup? = null
+    // OSD text views
+    private val m_osd = ArrayList<TextView>()
 
-    protected var m_osd = arrayOfNulls<TextView>(16)
-
-    protected var mPwProtocol: PWProtocol? = null        // Pw Connection
+    // PW protocol for status update
+    protected val mPwProtocol = PWProtocol()
 
     // player support
-    internal var mplayer: PWPlayer? = null
+    protected var mplayer: PWPlayer? = null
     protected var mstream: PWStream? = null
     protected var mTimeAnimator: TimeAnimator? = null
     protected var m_UIhandler: Handler? = null
@@ -71,7 +71,7 @@ open class PwViewActivity : Activity() {
 
     private var m_req_hideui = false
 
-    internal var m_keepon = false
+    protected var m_keepon = false
 
     protected var sreenTimeout: Int
         get() {
@@ -80,35 +80,28 @@ open class PwViewActivity : Activity() {
             } catch (e: Settings.SettingNotFoundException) {
             } catch (e: SecurityException) {
             }
-
             return 0
         }
         set(ms) {
             try {
                 Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, ms)
             } catch (e: SecurityException) {
-
             }
-
         }
+
+    protected var isScreenLandscape : Boolean = false
+        get() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
 
     // Generic screen initialization
     // called in onCreate(), after setContentView
     protected fun setupScreen() {
-
-        var i: Int
-
         val prefs = getSharedPreferences("pwv", 0)
         m_connMode = prefs.getInt("connMode", DvrClient.CONN_DIRECT)
 
-
-        m_screen = layoutscreen
-
-        val configuration = resources.configuration
-        m_screenLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        if (m_screenLandscape) {
+        if (isScreenLandscape) {
             // Hide the status bar.
-            m_screen?.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
+            layoutscreen.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
                     or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     or View.SYSTEM_UI_FLAG_IMMERSIVE
                     or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
@@ -118,51 +111,27 @@ open class PwViewActivity : Activity() {
         windowManager.defaultDisplay.getMetrics(metrics)
         m_screendensity = metrics.density
 
-        // PW protocol for status update
-        mPwProtocol = PWProtocol()
-
-        i = 0
-        while (i < m_osd.size) {
-            m_osd[i] = TextView(this)
-            m_osd[i]?.setTextColor(-0x2f000001)
-            m_screen?.addView(
-                m_osd[i],
-                1,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT
-                )
-            )
-            m_osd[i]?.setTextSize(
-                TypedValue.COMPLEX_UNIT_DIP,
-                configuration.screenWidthDp.toFloat() / 32.0f
-            )
-            m_osd[i]?.setShadowLayer(2f, 0f, 0f, Color.BLACK)
-            m_osd[i]?.setVisibility(View.INVISIBLE)
-            i++
-        }
-
         m_channel = channel
         m_totalChannel = m_channel + 1
 
         // Screen swip support
-        m_screen?.setOnTouchListener(object : View.OnTouchListener {
+        layoutscreen.setOnTouchListener(object : View.OnTouchListener {
 
-            internal var scroll_dir: Int = 0      // 0: touch down, 1: scrolling  2: volume
+            private var scroll_dir: Int = 0      // 0: touch down, 1: scrolling  2: volume
 
             internal var scroller = Scroller(baseContext)
             internal val scrollUpdate: Runnable = object : Runnable {
                 override fun run() {
-                    val sw = m_screen!!.width
-                    var sx = m_screen!!.scrollX
+                    val sw = layoutscreen.width
+                    var sx = layoutscreen.scrollX
                     if (sx > sw || sx < -sw) {
                         scroller.forceFinished(true)
                     }
                     if (scroller.computeScrollOffset()) {
-                        m_screen!!.scrollTo(scroller.currX, 0)
-                        m_screen!!.postOnAnimation(this)
+                        layoutscreen.scrollTo(scroller.currX, 0)
+                        layoutscreen.postOnAnimation(this)
                     } else {
-                        sx = m_screen!!.scrollX
+                        sx = layoutscreen.scrollX
                         if (sx > sw / 2) {
                             goNextChannel()
                         } else if (sx < -sw / 2) {
@@ -193,7 +162,7 @@ open class PwViewActivity : Activity() {
                         distanceX: Float,
                         distanceY: Float
                     ): Boolean {
-                        if (scroll_dir == 0 && m_screen!!.scrollX == 0) {
+                        if (scroll_dir == 0 && layoutscreen.scrollX == 0) {
                             if (Math.abs(distanceX) > Math.abs(distanceY)) {
                                 scroll_dir = 1
                             } else {
@@ -203,7 +172,7 @@ open class PwViewActivity : Activity() {
                         }
 
                         if (scroll_dir == 1) {
-                            m_screen?.scrollBy(distanceX.toInt(), 0)
+                            layoutscreen.scrollBy(distanceX.toInt(), 0)
                         } else if (scroll_dir == 2 && mplayer != null) {      // 2 : set volume
                             disty += distanceY
                             if (disty > m_screendensity * 8) {
@@ -233,10 +202,10 @@ open class PwViewActivity : Activity() {
                 })
 
             internal fun fling(velocityX: Int) {
-                val screenWidth = m_screen!!.width
+                val screenWidth = layoutscreen.width
                 scroller.fling(
-                    m_screen!!.scrollX,
-                    m_screen!!.scrollY,
+                    layoutscreen.scrollX,
+                    layoutscreen.scrollY,
                     -velocityX / 2,
                     0,
                     -5 * screenWidth,
@@ -255,7 +224,7 @@ open class PwViewActivity : Activity() {
                 if (scroller.duration < 300) {
                     scroller.extendDuration(500 - scroller.duration)
                 }
-                m_screen?.postOnAnimation(scrollUpdate)
+                layoutscreen.postOnAnimation(scrollUpdate)
             }
 
             override fun onTouch(v: View, event: MotionEvent): Boolean {
@@ -263,7 +232,7 @@ open class PwViewActivity : Activity() {
                 if (!res) {
                     val act = event.actionMasked
                     if (act == MotionEvent.ACTION_UP || act == MotionEvent.ACTION_CANCEL) {
-                        val sx = m_screen!!.scrollX
+                        val sx = layoutscreen.scrollX
                         if (sx != 0) {
                             fling(0)
                             return true
@@ -279,12 +248,11 @@ open class PwViewActivity : Activity() {
 
     protected open fun showUI() {
         // display action bar and menu
-        if (m_screenLandscape) {
-
+        if (isScreenLandscape) {
             actionBar!!.show()
-            findViewById<View>(R.id.pwcontrol).visibility = View.VISIBLE
-            findViewById<View>(R.id.pwcontrol).animate().alpha(1.0f)
-            findViewById<View>(R.id.btPlayMode).animate().alpha(1.0f)
+            pwcontrol.visibility = View.VISIBLE
+            pwcontrol.animate().alpha(1.0f)
+            btPlayMode.animate().alpha(1.0f)
 
             if (m_UIhandler != null) {
                 m_UIhandler!!.removeMessages(MSG_UI_HIDE) // remove pending hide ui
@@ -298,10 +266,10 @@ open class PwViewActivity : Activity() {
 
     protected open fun hideUI() {
         // display action bar and menu
-        if (m_screenLandscape && actionBar!!.isShowing) {
+        if (isScreenLandscape && actionBar!!.isShowing) {
 
             // Hide the status bar.
-            m_screen?.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
+            layoutscreen.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
                     or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     or View.SYSTEM_UI_FLAG_IMMERSIVE
                     or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
@@ -309,19 +277,20 @@ open class PwViewActivity : Activity() {
             // Hide Title bar
             actionBar!!.hide()
 
-            findViewById<View>(R.id.btPlayMode).animate()
+            btPlayMode
+                .animate()
                 .alpha(0.0f)
+
             // Hide Buttons
-            findViewById<View>(R.id.pwcontrol).animate()
+            pwcontrol.animate()
                 .alpha(0.0f)
                 .setListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
                         super.onAnimationEnd(animation)
-                        if (actionBar!!.isShowing) {
-                            findViewById<View>(R.id.pwcontrol).visibility = View.VISIBLE
-                        } else {
-                            findViewById<View>(R.id.pwcontrol).visibility = View.GONE
-                        }
+                        pwcontrol.visibility = if (actionBar!!.isShowing)
+                            View.VISIBLE
+                        else
+                            View.GONE
                     }
                 })
 
@@ -331,7 +300,7 @@ open class PwViewActivity : Activity() {
 
     private fun toggleUI() {
         // display action bar and menu
-        if (m_screenLandscape && actionBar!!.isShowing) {
+        if (isScreenLandscape && actionBar!!.isShowing) {
             hideUI()
         } else {
             showUI()
@@ -361,16 +330,42 @@ open class PwViewActivity : Activity() {
         }
     }
 
+    private fun newOSDView() : TextView {
+        val view = TextView(this)
+        view.setTextColor(-0x2f000001)
+        layoutscreen.addView(
+            view,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+        view.setTextSize(
+            TypedValue.COMPLEX_UNIT_DIP,
+            resources.configuration.screenWidthDp.toFloat() / 32.0f
+        )
+
+        view.setShadowLayer(2f, 0f, 0f, Color.BLACK)
+        view.setVisibility(View.INVISIBLE)
+        return view
+    }
+
     protected fun stopMedia() {
         if (mstream != null) {
             mstream!!.release()
             mstream = null
         }
         if (mplayer != null) {
-            mplayer!!.Release()
+            mplayer!!.release()
             mplayer = null
         }
-        m_screen?.scrollTo(0, 0)
+        layoutscreen.scrollTo(0, 0)
+
+        // clear OSD ;
+        for (vosd in m_osd) {
+            layoutscreen.removeView(vosd)
+        }
+        m_osd.clear()
     }
 
     protected fun goPrevChannel() {
@@ -439,25 +434,25 @@ open class PwViewActivity : Activity() {
 
         mTimeAnimator!!.end()
         stopMedia()
-        mPwProtocol?.cancel()
+        mPwProtocol.cancel()
 
         sreenTimeout = savedScreenTimeout
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus && !m_screenLandscape) {
-            var w = m_screen!!.width
-            var h = m_screen!!.height
+        if (hasFocus && !isScreenLandscape) {
+            var w = layoutscreen.width
+            var h = layoutscreen.height
             if (w > 0 && h > 0) {
-                val lp = m_screen!!.layoutParams as RelativeLayout.LayoutParams
+                val lp = layoutscreen.layoutParams as RelativeLayout.LayoutParams
                 // get layout width&height
                 w += lp.leftMargin + lp.rightMargin
                 h += lp.topMargin + lp.bottomMargin
                 if (h * 4 > w * 3) {
                     h = (h - w * 3 / 4) / 2
                     lp.setMargins(0, h, 0, h)
-                    m_screen?.requestLayout()
+                    layoutscreen.requestLayout()
                 }
             }
         }
@@ -473,23 +468,25 @@ open class PwViewActivity : Activity() {
         val text_len = text_off + txtFrame.len
 
         var idx = 0
-        while (idx < m_osd.size &&
-            m_osd[idx] != null &&
-            text_off < text_len &&
+        while (text_off < text_len &&
             frame[text_off] == 's'.toByte() &&
-            frame[text_off + 1] == 't'.toByte()
-        ) {
+            frame[text_off + 1] == 't'.toByte() )
+        {
+            while( idx >= m_osd.size ) {
+                m_osd.add( newOSDView() )
+            }
+
             val osdLen = frame[text_off + 6].toInt()
-            if (osdLen >= 4) {
-                if (m_osd[idx]?.getVisibility() != View.VISIBLE) {
-                    m_osd[idx]?.setVisibility(View.VISIBLE)
+            if (osdLen >= 4 ) {
+                if (m_osd[idx].getVisibility() != View.VISIBLE) {
+                    m_osd[idx].setVisibility(View.VISIBLE)
 
                     val align = frame[text_off + 8].toInt()
                     val posx = frame[text_off + 9].toInt()
                     val posy = frame[text_off + 10].toInt()
 
-                    val h = m_osd[idx]!!.getHeight() / 24.0f
-                    val lp = m_osd[idx]!!.getLayoutParams() as FrameLayout.LayoutParams
+                    val h = m_osd[idx].textSize / 24.0f
+                    val lp = m_osd[idx].getLayoutParams() as FrameLayout.LayoutParams
                     lp.height = -2
                     lp.width = -2
                     lp.gravity = 0
@@ -512,12 +509,11 @@ open class PwViewActivity : Activity() {
                         lp.bottomMargin = (posy * h).toInt()
                         lp.gravity = lp.gravity or Gravity.BOTTOM
                     }
-                    m_osd[idx]?.requestLayout()
-
+                    m_osd[idx].requestLayout()
                 }
 
                 try {
-                    m_osd[idx]?.setText(
+                    m_osd[idx].setText(
                         String(
                             frame,
                             text_off + 12,

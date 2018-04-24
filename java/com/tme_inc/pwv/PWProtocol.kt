@@ -30,7 +30,7 @@ class PWProtocol : DvrClient() {
     protected var mTask: PWTask<*>? = null
 
     val isBusy: Boolean
-        get() = mTask != null
+        get() = (mTask != null) && (mTask!!.status == AsyncTask.Status.RUNNING)
 
     fun cancel() {
         close()
@@ -50,26 +50,28 @@ class PWProtocol : DvrClient() {
 
         override fun onPostExecute(result: Bundle?) {
             super.onPostExecute(result)
-            if( result != null ) {
+            if( result != null && !result.isEmpty ) {
                 mlistener(result)
             }
+            mTask = null
+        }
+
+        override fun onCancelled() {
+            super.onCancelled()
             mTask = null
         }
     }
 
     private inner class GetVriTask(listener: ( Bundle ) -> Unit  ) : PWTask<Void>(listener) {
-
-        override fun doInBackground(vararg avoid: Void): Bundle {
-            var result: Bundle? = null
-            var vri_s = 0
+        override fun doInBackground(vararg params: Void?): Bundle {
+            var vri_s : Int
             var vri_rsize = 468
 
-            result = Bundle()
-            var ans: DvrClient.Ans
+            var result = Bundle()
             // REQ:
             // REQGETDATA   (302)
             // PROTOCOL_PW_GETVRILISTSIZE	(1004)
-            ans = request(302, 1004)
+            var ans = request(302, 1004)
             // ANS:
             // ANSGETDATA   (302)
             if (ans.code == 302 && ans.size > 0) {
@@ -139,8 +141,8 @@ class PWProtocol : DvrClient() {
 
     private inner class GetOfficerIDListTask(listener: ( Bundle ) -> Unit ) : PWTask<Void>(listener) {
 
-        override fun doInBackground(vararg aVoid: Void): Bundle? {
-            var result: Bundle? = null
+        override fun doInBackground(vararg aVoid: Void): Bundle {
+            var result = Bundle()
 
             // REQ:
             // REQGETDATA   (302)
@@ -150,9 +152,6 @@ class PWProtocol : DvrClient() {
             // ANS:
             // ANSGETDATA   (302)
             if (ans.code == 302 && ans.size > 0) {
-                val nid = ans.data
-                val idlen = ans.size / nid
-                result = Bundle()
                 result.putInt("policeId_number", ans.data)
                 result.putInt("policeId_size", ans.size)
                 result.putByteArray("policeId_list", ans.dataBuffer.array())
@@ -172,7 +171,7 @@ class PWProtocol : DvrClient() {
 
         override fun doInBackground(vararg oids: String): Bundle? {
             var result: Bundle? = null
-            if (oids.size > 0 && oids[0] != null) {
+            if (oids.isNotEmpty()) {
                 val officerId = oids[0] + "\u0000"   // append null terminate
                 val oidarray = officerId.toByteArray()
 
@@ -253,13 +252,12 @@ class PWProtocol : DvrClient() {
     private inner class GetPWStatusTask(listener: ( Bundle ) -> Unit ) : PWTask<Void>(listener) {
 
         override fun doInBackground(vararg avoid: Void): Bundle? {
-            var result: Bundle? = null
-            result = Bundle()
+            var result = Bundle()
 
             // REQ:
             // REQGETDATA   (302)
             // PROTOCOL_PW_GETSTATUS   	(1001)
-            var ans: DvrClient.Ans = request(302, 1001)
+            var ans = request(302, 1001)
 
             // ANS:
             // ANSGETDATA   (302)
@@ -275,8 +273,7 @@ class PWProtocol : DvrClient() {
             // ANS:
             // ANSGETDATA   (302)
             if (ans.code == 302 && ans.size > 0) {
-                val warning = String(ans.dataBuffer.array())
-                result.putString("DiskInfo", warning.trim { it <= ' ' })
+                result.putString("DiskInfo", String(ans.dataBuffer.array()).trim { it <= ' ' })
             }
 
             /*
@@ -310,7 +307,7 @@ class PWProtocol : DvrClient() {
             var res = true
 
             // connect to remote server directly
-            if (connect(loginServer!!, loginPort)) {
+            if (connect(loginServer, loginPort)) {
                 var nonce = "nonce"
 
                 sendLine("session\n")
@@ -328,7 +325,7 @@ class PWProtocol : DvrClient() {
                         digester.update(nonce.toByteArray())
                         digester.update(params[1].toByteArray())
                         digester.update(params[2].toByteArray())
-                        digester.update(mId!!.toByteArray())
+                        digester.update(mId.toByteArray())
                         val digest = digester.digest()
                         for (i in digest.indices) {
                             key += String.format("%02x", digest[i])
@@ -344,7 +341,7 @@ class PWProtocol : DvrClient() {
                 }
 
                 if (res ) {
-                    result.putString("sessionId", fields!![1])
+                    result.putString("sessionId", fields[1])
                     sendLine(String.format("list %s *\n", fields[1]))
                     fields = recvLine().split(Regex("\\s+"))
                     if (fields.size > 0 && fields[0].compareTo("rlist") == 0) {
@@ -416,7 +413,7 @@ class PWProtocol : DvrClient() {
                 )
 
                 // send to unicast to preset server ( over internet, maybe )
-                if (params.size > 0 && params[0] != null && params[0].length > 1) {
+                if (params.size > 0 && params[0].length > 1) {
                     udpSocket.send(
                         DatagramPacket(
                             packet,
@@ -430,7 +427,7 @@ class PWProtocol : DvrClient() {
                 val deviceSet = HashSet<String>()
                 // now wait for response
                 var timeout = 10
-                while (!isCancelled && mlistener != null && timeout > 0) {
+                while (!isCancelled && timeout > 0) {
                     val udpPacket = DatagramPacket(ByteArray(64), 64)
                     try {
                         udpSocket.receive(udpPacket)
@@ -482,13 +479,11 @@ class PWProtocol : DvrClient() {
         override fun onProgressUpdate(vararg values: String?) {
             super.onProgressUpdate(*values)
 
-            if (mlistener != null) {
-                val progress = Bundle()
-                progress.putBoolean("Complete", false)
-                progress.putString("deviceIP", values[0])
-                progress.putString("deviceName", values[1])
-                mlistener(progress)
-            }
+            val progress = Bundle()
+            progress.putBoolean("Complete", false)
+            progress.putString("deviceIP", values[0])
+            progress.putString("deviceName", values[1])
+            mlistener(progress)
 
         }
     }
@@ -521,7 +516,7 @@ class PWProtocol : DvrClient() {
             var daylist = IntArray(0)
 
             // REQDAYLIST   (238)
-            var ans: DvrClient.Ans = request(238)
+            var ans = request(238)
 
             // ANSDAYLIST   (223)
             if (ans.code == 223 && ans.size > 0) {
@@ -562,12 +557,10 @@ class PWProtocol : DvrClient() {
 
         override fun onProgressUpdate(vararg values: String?) {
             super.onProgressUpdate(*values)
-            if (mlistener != null) {
-                val progress = Bundle()
-                progress.putBoolean("Complete", false)
-                progress.putStringArray("clips", values)
-                mlistener(progress)
-            }
+            val progress = Bundle()
+            progress.putBoolean("Complete", false)
+            progress.putStringArray("clips", values)
+            mlistener(progress)
         }
 
     }
@@ -582,7 +575,6 @@ class PWProtocol : DvrClient() {
 
         override fun doInBackground(vararg params: Int?): Bundle? {
             val result = Bundle()
-            var daylist = IntArray(0)
 
             // REQDAYLIST   (238)
             val ans = request(238)
@@ -590,7 +582,7 @@ class PWProtocol : DvrClient() {
             if (ans.code == 223 && ans.size > 0) {
                 val daybuffer = ans.dataBuffer
                 daybuffer.order(ByteOrder.LITTLE_ENDIAN)
-                daylist = IntArray(ans.size / 4)
+                var daylist = IntArray(ans.size / 4)
                 for (i in daylist.indices) {
                     daylist[i] = daybuffer.getInt(i * 4)
                 }
@@ -607,16 +599,15 @@ class PWProtocol : DvrClient() {
     }
 
     companion object {
-
         // PW virtual key
-        val PW_VK_TM_UP = 0xe0
-        val PW_VK_TM_DOWN = 0x1e0
-        val PW_VK_LP_UP = 0xe1
-        val PW_VK_LP_DOWN = 0x1e1
-        val PW_VK_C1_UP = 0xe6
-        val PW_VK_C1_DOWN = 0x1e6
-        val PW_VK_C2_UP = 0xe7
-        val PW_VK_C2_DOWN = 0x1e7
+        const val PW_VK_TM_UP = 0xe0
+        const val PW_VK_TM_DOWN = 0x1e0
+        const val PW_VK_LP_UP = 0xe1
+        const val PW_VK_LP_DOWN = 0x1e1
+        const val PW_VK_C1_UP = 0xe6
+        const val PW_VK_C1_DOWN = 0x1e6
+        const val PW_VK_C2_UP = 0xe7
+        const val PW_VK_C2_DOWN = 0x1e7
     }
 
 }

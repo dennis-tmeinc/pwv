@@ -1,23 +1,15 @@
 package com.tme_inc.pwv
 
-import android.content.Context
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.os.Bundle
 import android.app.Activity
+import android.content.Context
+import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.ListView
-import android.widget.TextView
 import kotlinx.android.synthetic.main.activity_archive.*
 import kotlinx.android.synthetic.main.layout_clipitem.view.*
-
-import java.util.Comparator
-import java.util.TreeMap
+import java.util.*
 
 class ArchiveActivity : Activity() {
 
@@ -37,8 +29,7 @@ class ArchiveActivity : Activity() {
 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val rowView: View
-            val ci: ClipInfo?
-            ci = this.getItem(position)
+            val ci: ClipInfo? = this.getItem(position)
 
             if (convertView == null) {
                 val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
@@ -58,18 +49,16 @@ class ArchiveActivity : Activity() {
         fun load() {
             clear()
             pwProtocol.getClipList(
-                {result ->
-                    if (result != null) {
-                        val cliplist = result.getStringArray("clips")
-                        if (cliplist != null) {
-                            for ( clipname in cliplist ) {
-                                val ci = ClipInfo()
-                                ci.filename = clipname
-                                this.add(ci)
-                            }
+                { result ->
+                    val cliplist = result.getStringArray("clips")
+                    if (cliplist != null) {
+                        for (clipname in cliplist) {
+                            val ci = ClipInfo()
+                            ci.filename = clipname
+                            this.add(ci)
                         }
-                        this.notifyDataSetChanged()
                     }
+                    this.notifyDataSetChanged()
                 },
                 -1
             )

@@ -17,8 +17,8 @@ class CovertScreenActivity : Activity() {
         setContentView(R.layout.activity_covert_screen)
 
         // Set up the user interaction to manually show or hide the system UI.
-        fullscreen_content?.setOnClickListener { finish() }
-        fullscreen_content?.systemUiVisibility = (View.SYSTEM_UI_FLAG_LOW_PROFILE
+        fullscreen_content.setOnClickListener { finish() }
+        fullscreen_content.systemUiVisibility = (View.SYSTEM_UI_FLAG_LOW_PROFILE
                 or View.SYSTEM_UI_FLAG_FULLSCREEN
                 or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -26,7 +26,7 @@ class CovertScreenActivity : Activity() {
                 or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION)
 
         // Hide UI bar
-        actionBar?.hide()
+        actionBar.hide()
         window.attributes.screenBrightness = 0.0f
     }
 

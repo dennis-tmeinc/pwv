@@ -77,5 +77,6 @@
     <string name="title_activity_covert_screen">CovertScreenActivity</string>
     <string name="covert_screen">Covert Screen</string>
     <string name="title_activity_archive">ArchiveActivity</string>
+    <string name="text_detecting_device">Detecting device ......</string>
 
 </resources>

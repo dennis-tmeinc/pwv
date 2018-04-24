@@ -23,7 +23,7 @@ class PWRc4 {
         var j : Int = 0
         for (n in k.indices) {
             i = n and 0xff
-            j = j + s[i].toInt() + k[n].toInt() and 0xff
+            j = (j + s[i] + k[n]) and 0xff
 
             // swap(s[i], s[j])
             val swap = s[i]
@@ -42,8 +42,8 @@ class PWRc4 {
     // RC4 PRGA
     //   The pseudo-random generation algorithm
     fun RC4_PRGA(): Byte {
-        si = si + 1 and 0xff
-        sj = sj + s[si] and 0xff
+        si = (si + 1) and 0xff
+        sj = (sj + s[si]) and 0xff
 
         // swap( s[i], s[j])
         val swap = s[si]

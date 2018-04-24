@@ -53,7 +53,7 @@ class PwvService : Service() {
                 running = false
             }
 
-            mThread = Thread(Runnable {
+            mThread = Thread({
                 while (running && server != null && !server!!.isClosed) {
                     try {
                         val s = server!!.accept()
@@ -640,7 +640,7 @@ class PwvService : Service() {
         mServer = PwvServer()
     }
 
-    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         mServer?.start()
         return Service.START_STICKY
     }

@@ -12,14 +12,10 @@ import java.nio.ByteBuffer
  * Created by dennis on 09/06/15.
  * Socket wrapper for PW connections
  */
-open class PwvSocket(s: Socket? = null) : Closeable {
+open class PwvSocket( s: Socket? = null) : Closeable {
     private var iStream: InputStream? = null
     private var oStream: OutputStream? = null
-    private var mSocket: Socket? = null
-
-    init {
-        mSocket = s
-    }
+    private var mSocket: Socket? = s
 
     val isConnected: Boolean
         get() = mSocket != null && mSocket!!.isConnected

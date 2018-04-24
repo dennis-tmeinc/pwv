@@ -66,6 +66,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContentView(R.layout.activity_main)
 
         window.addFlags(
@@ -82,6 +83,7 @@ class MainActivity : Activity() {
             android.R.layout.simple_list_item_1,
             m_deviceList
         )
+
         devicelist.setOnItemClickListener { parent, view, position, id ->
             onSelectDevice(position)
         }
@@ -336,44 +338,41 @@ class MainActivity : Activity() {
 
         m_pwProtocol.RemoteLogin(
             { result ->
-                if (result != null) {
-                    var numDevice = 0
-                    m_deviceList.clear()
+                m_deviceList.clear()
 
-                    if (result.getString("sessionId", "0").length < 2) {
-                        numDevice = 0
-                    } else {
-                        numDevice = result.getInt("numberOfDevices", 0)
-                    }
-
-                    if (numDevice > 0) {
-                        m_sessionId = result.getString("sessionId")
-                        for (i in 0 until numDevice) {
-                            m_deviceList.add(
-                                device(
-                                    result.getString("name$i"),
-                                    result.getString("id$i")
-                                )
-                            )
-                        }
-                    }
-
-                    updateNameList()
-                    devicelist.postDelayed({ updateDeviceList() }, 15000)
+                val numDevice = if (result.getString("sessionId", "0").length < 2) {
+                    0
+                } else {
+                    result.getInt("numberOfDevices", 0)
                 }
+
+                if (numDevice > 0) {
+                    m_sessionId = result.getString("sessionId")
+                    for (i in 0 until numDevice) {
+                        m_deviceList.add(
+                            device(
+                                result.getString("name$i"),
+                                result.getString("id$i")
+                            )
+                        )
+                    }
+                }
+
+                updateNameList()
+                devicelist.postDelayed({ updateDeviceList() }, 15000)
             },
             user, pass, accessKey
         )
     }
 
-    protected fun updateDeviceList(refresh: Boolean = false ) {
+    private fun updateDeviceList(refresh: Boolean = false ) {
 
         if( !m_run )
             return
 
         if (refresh) {
             m_deviceList.clear()
-            deviceheader.text = "Detecting device..."
+            deviceheader.text = getText(R.string.text_detecting_device)
             devicedetect.visibility = View.VISIBLE
             setButtonColor()
             m_pwProtocol.cancel()
@@ -400,8 +399,8 @@ class MainActivity : Activity() {
     internal inner class UpdateTask : AsyncTask<Unit, Unit, Unit>() {
 
         var manual = false
-        var newversion: JSONObject? = null
-        var error: String? = null
+        private var newversion: JSONObject? = null
+        private var error: String? = null
 
         override fun doInBackground(vararg params: Unit?) {
             try {
@@ -410,9 +409,8 @@ class MainActivity : Activity() {
                     URL(googleDownload + PWVFileId).openConnection() as HttpURLConnection
                 gdConnection.connectTimeout = 10000           //set timeout to 10 seconds
                 if (gdConnection.responseCode == HttpURLConnection.HTTP_OK) {
-                    val `in` = gdConnection.inputStream
                     val content = ByteArray(8000)
-                    val r = `in`.read(content)
+                    val r = gdConnection.inputStream.read(content)
                     if (r > 5) {
                         newversion = JSONObject(String(content, 0, r))
                     }
@@ -460,9 +458,8 @@ class MainActivity : Activity() {
                                     Environment.DIRECTORY_DOWNLOADS,
                                     pwvFile
                                 )
-                            var pwvDownloadId: Long = 0
                             try {
-                                pwvDownloadId = dm.enqueue(request)
+                                dm.enqueue(request)
                             } catch (e: Exception) {
                                 e.printStackTrace()
                             }

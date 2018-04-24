@@ -14,13 +14,10 @@ import java.util.*
 
 class Playback : PwViewActivity() {
 
-    private var m_playSpeed =
-        1000        // 1000 : normal speed, 0: paused, 1: one frame forward than paused
+    private var m_playSpeed =  1000        // 1000 : normal speed, 0: paused, 1: one frame forward than paused
     private var m_loading = true
 
     internal var mTimeBar: TimeBar? = null
-
-    private var buttonHint: Toast? = null
 
     internal var refTime: Long = 0          // ref time
     internal var refFrameTime: Long = 0     // ref frame time stamp
@@ -34,87 +31,85 @@ class Playback : PwViewActivity() {
         // setup player screen
         setupScreen()
 
-        m_UIhandler = object : Handler() {
-            override fun handleMessage(msg: Message) {
-                super.handleMessage(msg)
-                when (msg.what) {
-                    MSG_UI_HIDE -> hideUI()
+        m_UIhandler = Handler {msg: Message ->
+            when (msg.what) {
+                MSG_UI_HIDE -> hideUI()
 
-                    MSG_PW_CONNECT -> {
-                        // PW stream connected
-                        if (mTimeBar != null) {
-                            mTimeBar!!.setDateList((mstream as PWPlaybackStream).dayList)
-                            playerSeek(mTimeBar!!.pos)
-                        }
+                MSG_PW_CONNECT -> {
+                    // PW stream connected
+                    if (mTimeBar != null) {
+                        mTimeBar!!.setDateList((mstream as PWPlaybackStream).dayList)
+                        playerSeek(mTimeBar!!.pos)
                     }
+                }
 
-                    MSG_PW_SEEK -> {
-                        // PW Stream seek complete
+                MSG_PW_SEEK -> {
+                    // PW Stream seek complete
 
-                        // to flush player if play is running
-                        if (mplayer != null) {
-                            mplayer!!.flush()
-                        }
-                        refFrameTime = 0       // reset frame reference time
-                        if (m_playSpeed == 0)
-                            m_playSpeed = 1    // try display one frame
-
-                        mstream!!.start()
+                    // to flush player if play is running
+                    if (mplayer != null) {
+                        mplayer!!.flush()
                     }
+                    refFrameTime = 0       // reset frame reference time
+                    if (m_playSpeed == 0)
+                        m_playSpeed = 1    // try display one frame
 
-                    MSG_PW_GETCLIPLIST -> if (msg.arg2 == 1) {   // clip info
-                        mTimeBar!!.setClipInfo(msg.arg1, msg.obj as IntArray)
-                    } else if (msg.arg2 == 2) {   //lock info
-                        mTimeBar!!.setLockInfo(msg.arg1, msg.obj as IntArray)
-                    }
+                    mstream!!.start()
+                }
 
-                    MSG_TB_GETCLIPLIST -> if (mstream != null) {
-                        (mstream as PWPlaybackStream).getClipList(msg.arg1)
-                    }
+                MSG_PW_GETCLIPLIST -> if (msg.arg2 == 1) {   // clip info
+                    mTimeBar!!.setClipInfo(msg.arg1, msg.obj as IntArray)
+                } else if (msg.arg2 == 2) {   //lock info
+                    mTimeBar!!.setLockInfo(msg.arg1, msg.obj as IntArray)
+                }
 
-                    MSG_TB_SCROLL -> if (mTimeBar!!.isSeekPending) {
-                        playerSeek(mTimeBar!!.seekPos)
-                    }
+                MSG_TB_GETCLIPLIST -> if (mstream != null) {
+                    (mstream as PWPlaybackStream).getClipList(msg.arg1)
+                }
 
-                    MSG_VRI_SELECTED -> {
-                        val vri = msg.obj as String
+                MSG_TB_SCROLL -> if (mTimeBar!!.isSeekPending) {
+                    playerSeek(mTimeBar!!.seekPos)
+                }
 
-                        // split date/time from vri
-                        val strArray = vri.split("-")
-                        if (strArray.size > 1 && mstream != null) {
-                            val datetime = strArray[strArray.size-1]
-                            val dt = java.lang.Long.parseLong(datetime)
-                            val date = (dt / 10000L).toInt()
-                            val time = (dt % 10000L).toInt()
-                            val calendar = Calendar.getInstance()
-                            calendar.clear()
-                            calendar.set(Calendar.YEAR, 2000 + date / 10000)
-                            calendar.set(Calendar.MONTH, date % 10000 / 100 - 1 + Calendar.JANUARY)
-                            calendar.set(Calendar.DATE, date % 100)
+                MSG_VRI_SELECTED -> {
+                    val vri = msg.obj as String
 
-                            calendar.set(Calendar.HOUR_OF_DAY, time / 100)
-                            calendar.set(Calendar.MINUTE, time % 100)
-                            playerSeek(calendar.timeInMillis)
-                        }
-                    }
-
-
-                    MSG_DATE_SELECTED -> {
-                        val date = msg.arg1
+                    // split date/time from vri
+                    val strArray = vri.split("-")
+                    if (strArray.size > 1 && mstream != null) {
+                        val datetime = strArray[strArray.size-1]
+                        val dt = java.lang.Long.parseLong(datetime)
+                        val date = (dt / 10000L).toInt()
+                        val time = (dt % 10000L).toInt()
                         val calendar = Calendar.getInstance()
                         calendar.clear()
-                        calendar.set(Calendar.YEAR, date / 10000)
+                        calendar.set(Calendar.YEAR, 2000 + date / 10000)
                         calendar.set(Calendar.MONTH, date % 10000 / 100 - 1 + Calendar.JANUARY)
                         calendar.set(Calendar.DATE, date % 100)
 
+                        calendar.set(Calendar.HOUR_OF_DAY, time / 100)
+                        calendar.set(Calendar.MINUTE, time % 100)
                         playerSeek(calendar.timeInMillis)
                     }
                 }
+
+
+                MSG_DATE_SELECTED -> {
+                    val date = msg.arg1
+                    val calendar = Calendar.getInstance()
+                    calendar.clear()
+                    calendar.set(Calendar.YEAR, date / 10000)
+                    calendar.set(Calendar.MONTH, date % 10000 / 100 - 1 + Calendar.JANUARY)
+                    calendar.set(Calendar.DATE, date % 100)
+
+                    playerSeek(calendar.timeInMillis)
+                }
             }
+            true
         }
 
         mTimeBar = findViewById<View>(R.id.timebar) as TimeBar
-        mTimeBar!!.setUiHandler(m_UIhandler!!)
+        mTimeBar!!.uiHandler = m_UIhandler!!
 
         // restore timebar info
         mTimeBar!!.pos = PwViewActivity.tb_pos
@@ -201,8 +196,8 @@ class Playback : PwViewActivity() {
     override fun showUI() {
         super.showUI()
         // display action bar and menu
-        if (m_screenLandscape && mTimeBar != null) {
-            mTimeBar!!.visibility = View.VISIBLE
+        if( isScreenLandscape ) {
+            mTimeBar?.visibility = View.VISIBLE
         }
     }
 
@@ -212,18 +207,10 @@ class Playback : PwViewActivity() {
         mTimeBar?.visibility = View.INVISIBLE
     }
 
-    internal fun showHint(text: String) {
-        if (buttonHint == null) {
-            buttonHint = Toast.makeText(this, text, Toast.LENGTH_SHORT)
-            buttonHint!!.setGravity(Gravity.CENTER, 0, 0)
-        } else {
-            buttonHint!!.setText(text)
-        }
-        buttonHint!!.show()
-    }
-
-    override fun onResume() {
-        super.onResume()
+    protected fun showHint(text: String) {
+        val hint = Toast.makeText(this, text, Toast.LENGTH_SHORT)
+            hint.setGravity(Gravity.CENTER, 0, 0)
+            hint.show()
     }
 
     override fun onPause() {
@@ -242,12 +229,6 @@ class Playback : PwViewActivity() {
             loadingBar.visibility = View.VISIBLE
             loadingText.text = "Loading..."
             loadingText.visibility = View.VISIBLE
-
-            // clear OSD ;
-            for (iosd in m_osd) {
-                iosd?.text = ""
-                iosd?.visibility = View.INVISIBLE
-            }
             return
         } else if (mplayer == null) {
             val cn = mstream!!.channelName
@@ -273,7 +254,7 @@ class Playback : PwViewActivity() {
                         refTime = 0
                         refFrameTime = 0
                         idleTime = 0
-                        (findViewById<View>(R.id.button_play) as ImageButton).setImageResource(R.drawable.play_pause)
+                        button_play.setImageResource(R.drawable.play_pause)
                     }
                 }
             } else if (m_loading) {
@@ -371,8 +352,8 @@ class Playback : PwViewActivity() {
 
             // first video frame available?
             if (m_loading && rendered) {
-                findViewById<View>(R.id.loadingBar).visibility = View.INVISIBLE
-                findViewById<View>(R.id.loadingText).visibility = View.INVISIBLE
+                loadingBar.visibility = View.INVISIBLE
+                loadingText.visibility = View.INVISIBLE
                 m_loading = false
             }
         }

@@ -13,86 +13,79 @@ import java.nio.ByteOrder
 
 open class DvrClient : PwvSocket() {
 
-    protected var _connectMode: Int = 0
-    public var connectMode: Int
-        get() = _connectMode
-        set(mode: Int) { _setConnectMode(mode) }
-
-    protected var mHost: String? = null
+    private var mHost: String = "192.168.1.100"
     protected var mPort: Int = 0
 
     // remote login connections
-    protected var loginServer: String? = null
+    protected var loginServer: String = "localhost"
     protected var loginPort: Int = 0
 
-    protected var loginSessionId: String? = null
-    protected var loginTargetId: String? = null
-    protected var mId: String? = null          // my device id
+    private var loginSessionId: String = "0"
+    private var loginTargetId: String = "0"
+    protected var mId: String = "android"          // my device id
 
     // cmd: vserver <sessionid> <deviceid> <port>
-    val httpUrl: String?
+    val httpUrl: String
         get() {
-
+            var r = ""
             if (connectMode == CONN_DIRECT) {
                 return "http://$mHost/"
             } else if (loginServer != null) {
-                var r: String? = null
-                connect(loginServer!!, loginPort)
+                connect(loginServer, loginPort)
                 if (isConnected) {
-                    sendLine(String.format("vserver %s %s %d\n", loginSessionId, loginTargetId, 80))
+                    sendLine("vserver $loginSessionId $loginTargetId 80\n")
                     val fields = recvLine().split(Regex("\\s+"))
                     if (fields.size >= 3 && fields[0] == "ok") {
-                        if (fields[1] == "*")
-                            r = "http://" + loginServer + ":" + fields[2] + "/"
-                        else
-                            r = "http://" + fields[1] + ":" + fields[2] + "/"
+                        r = if (fields[1] == "*")
+                                "http://$loginServer:${fields[2]}/"
+                            else
+                                "http://${fields[1]}:${fields[2]}/"
                     }
                 }
                 close()
-                return r
             }
-            return null
+            return r
         }
 
-    open class Ans(
-        var code: Int = 0,
-        var data: Int = 0
+    var connectMode: Int = 0
+        set(mode: Int) {
+            field = mode
+
+            val prefs = appCtx!!.getSharedPreferences("pwv", 0)
+
+            mHost = prefs.getString("deviceIp", "192.168.1.100")
+            mPort = prefs.getInt("dvrPort", 15114)
+
+            loginServer = if (connectMode == CONN_USB) {
+                "127.0.0.1"          // local service
+            } else {      // default for direct connection (local lan)
+                prefs.getString("loginServer", "pwrev.us.to")
+            }
+
+            loginPort = prefs.getInt("loginPort", 15600)
+            loginSessionId = prefs.getString("loginSession", "0")
+            loginTargetId = prefs.getString("loginTargetId", "0")
+            mId = prefs.getString("aid", "android")          // my device id
+        }
+
+    init {
+        // to call connectMode settor
+        connectMode = appCtx!!.getSharedPreferences("pwv", 0).getInt("connMode", CONN_DIRECT)
+    }
+
+    open class Req (
+        var code: Int ,
+        var data: Int = 0,
+        var dataBuffer: ByteBuffer = ByteBuffer.allocate(0)
     ) {
         val size
             get() = dataBuffer.remaining()
-        var dataBuffer: ByteBuffer = ByteBuffer.allocate(0)
     }
 
-    class Req (
-        code: Int ,
-        data: Int = 0,
-        databuf: ByteBuffer? = null
-    ) : Ans( code, data ) {
-        init {
-            if( databuf != null ) {
-                dataBuffer = databuf
-            }
-        }
-    }
-
-    init {
-        val prefs = appCtx!!.getSharedPreferences("pwv", 0)
-
-        mHost = prefs.getString("deviceIp", "192.168.1.100")
-        mPort = prefs.getInt("dvrPort", 15114)
-        connectMode = prefs.getInt("connMode", CONN_DIRECT)
-
-        if (connectMode == CONN_USB) {
-            loginServer = "127.0.0.1"          // local service
-        } else {      // default for direct connection (local lan)
-            loginServer = prefs.getString("loginServer", "pwrev.us.to")
-        }
-
-        loginPort = prefs.getInt("loginPort", 15600)
-        loginSessionId = prefs.getString("loginSession", "0")
-        loginTargetId = prefs.getString("loginTargetId", "0")
-        mId = prefs.getString("aid", "android")          // my device id
-    }
+    class Ans(
+        code: Int = 0,
+        data: Int = 0
+    ) : Req( code, data )
 
     // connect to DVR
     fun connect(): Boolean {
@@ -103,12 +96,12 @@ open class DvrClient : PwvSocket() {
         close()
 
         if (connectMode == CONN_DIRECT) {
-            return connect(mHost!!, mPort)
+            return connect(mHost, mPort)
         } else {
-            connect(loginServer!!, loginPort)
+            connect(loginServer, loginPort)
             if (isConnected) {
                 // use login remote connection (internet)
-                sendLine(String.format("remote %s %s %d\n", loginSessionId, loginTargetId, mPort))
+                sendLine("remote $loginSessionId $loginTargetId $mPort\n" )
             } else {
                 close()
             }
@@ -116,27 +109,7 @@ open class DvrClient : PwvSocket() {
         return isConnected
     }
 
-    fun _setConnectMode(mode: Int) {
-        _connectMode = mode
-
-        val prefs = appCtx!!.getSharedPreferences("pwv", 0)
-
-        mHost = prefs.getString("deviceIp", "192.168.1.100")
-        mPort = prefs.getInt("dvrPort", 15114)
-
-        if (connectMode == CONN_USB) {
-            loginServer = "127.0.0.1"          // local service
-        } else {      // default for direct connection (local lan)
-            loginServer = prefs.getString("loginServer", "pwrev.us.to")
-        }
-
-        loginPort = prefs.getInt("loginPort", 15600)
-        loginSessionId = prefs.getString("loginSession", "0")
-        loginTargetId = prefs.getString("loginTargetId", "0")
-        mId = prefs.getString("aid", "android")          // my device id
-    }
-
-    protected fun sendReq(req: Req): Boolean {
+    private fun sendReq(req: Req): Boolean {
         if (connect()) {
             val buffer = ByteBuffer.allocate(12)
             buffer.order(ByteOrder.LITTLE_ENDIAN)
@@ -178,7 +151,12 @@ open class DvrClient : PwvSocket() {
         return Ans()
     }
 
-    fun request(req: Req): Ans {
+    fun request(
+        reqcode: Int,
+        reqdata: Int = 0,
+        dataBuffer: ByteBuffer = ByteBuffer.allocate(0)
+    ): Ans {
+        val req = Req(reqcode, reqdata, dataBuffer)
         for (retry in 0..2) {
             if (sendReq(req)) {
                 return recvAns()
@@ -188,19 +166,10 @@ open class DvrClient : PwvSocket() {
         return Ans()      // empty ans (error)
     }
 
-    @JvmOverloads
-    fun request(
-        reqcode: Int,
-        reqdata: Int = 0,
-        dataBuffer: ByteBuffer? = null
-    ): Ans {
-        return request(Req(reqcode, reqdata, dataBuffer))
-    }
-
     companion object {
         // Connect mode constance
-        val CONN_DIRECT = 0
-        val CONN_REMOTE = 1
-        val CONN_USB = 2
+        const val CONN_DIRECT = 0
+        const val CONN_REMOTE = 1
+        const val CONN_USB = 2
     }
 }

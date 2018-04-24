@@ -13,6 +13,7 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.experimental.and
 import kotlin.experimental.inv
@@ -26,64 +27,52 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
     private var mDecoder: MediaCodec? = null
 
-    private var m_AvailableInputBuffer: Int = 0
-    private var m_AvailableOutputBuffer: Int = 0
-    private val m_OutputBufferInfo: MediaCodec.BufferInfo
+    private var mAvailableInputBuffer = -1
+    private var mAvailableOutputBuffer = -1
+    private val mOutputBufferInfo = MediaCodec.BufferInfo()
 
     private val maxInputSize = 1000000
 
-    private var mMediaFormat: MediaFormat? = null
-    private var mAudioBuffers: ArrayBlockingQueue<MediaFrame>? = null
-    internal var mAudioThread: Thread? = null
+    private val mimeType = "video/avc"
+    private var mMediaFormat = MediaFormat.createVideoFormat(mimeType, 720, 480)        // default mediaformat
+    private var mAudioBuffers = LinkedBlockingQueue <MediaFrame> (5)
+    private var mAudioThread: Thread? = null
 
-    private val mContext: Context
+    private val mContext = activity.applicationContext
     private var mAudioRate = 8000   // audio playback samplereate
-    private var mAudioCodec: Short = 1     // audio codec, 1: ulaw, 2: alow
-
-    protected val mimeType = "video/avc"
-
-    init {
-        mContext = activity
-        mDecoder = null
-        m_OutputBufferInfo = MediaCodec.BufferInfo()
-        m_OutputBufferInfo.presentationTimeUs = 0
-        m_AvailableInputBuffer = -1
-        m_AvailableOutputBuffer = -1
-    }
+    private var mAudioCodec = 1     // audio codec, 1: ulaw, 2: alow
 
     fun start() {
 
         try {
             mDecoder =
-                    MediaCodec.createDecoderByType(mMediaFormat!!.getString(MediaFormat.KEY_MIME))
+                    MediaCodec.createDecoderByType(mMediaFormat.getString(MediaFormat.KEY_MIME))
         } catch (e: IOException) {
             mDecoder = null
         }
 
-        if (mDecoder == null) return
+        if (mDecoder != null) {
+            mDecoder!!.configure(mMediaFormat, mSurf, null, 0)
+            mDecoder!!.start()
 
-        mDecoder!!.configure(mMediaFormat, mSurf, null, 0)
-        mDecoder!!.start()
-
-        // start audio buffering thread
-        mAudioBuffers = ArrayBlockingQueue(5)
-
-        audioTimestamp = 0
-        mAudioThread = Thread(Runnable { audioRun() })
-        mAudioThread!!.priority = Thread.MAX_PRIORITY
-        mAudioThread!!.start()
+            // start audio buffering thread
+            audioTimestamp = 0
+            mAudioThread = Thread(Runnable { audioRun() })
+            mAudioThread!!.priority = Thread.MAX_PRIORITY
+            mAudioThread!!.start()
+        }
     }
 
     /**
      * Releases resources and ends the encoding/decoding session.
      */
-    fun Release() {
+    fun release() {
         if (mDecoder != null) {
             mDecoder!!.release()
             mDecoder = null
         }
-        m_AvailableInputBuffer = -1
-        m_AvailableOutputBuffer = -1
+        mAvailableInputBuffer = -1
+        mAvailableOutputBuffer = -1
 
         // stop Audio Thread
         if (mAudioThread != null && mAudioThread!!.isAlive) {
@@ -96,11 +85,11 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
             mAudioThread = null
         }
-        mAudioBuffers!!.clear()
+        mAudioBuffers.clear()
     }
 
     private fun restart() {
-        Release()
+        release()
         start()
     }
 
@@ -120,7 +109,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
             extractor.setDataSource(mContext, videoUri, null)
             val nTracks = extractor.trackCount
             for (i in 0 until nTracks) {
-                var mf = extractor.getTrackFormat(i)
+                val mf = extractor.getTrackFormat(i)
                 if (mf.getString(MediaFormat.KEY_MIME).contains("video/")) {
                     mediaFormat = mf
                     mediaFormat!!.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, maxInputSize)
@@ -230,26 +219,31 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
         mMediaFormat!!.setLong(MediaFormat.KEY_DURATION, 100000000000L)
     }
 
-    fun setAudioFormat(audio_codec: Short, samplerate: Int) {
-        if (samplerate < 8000 || samplerate > 48000)
-            mAudioRate = 8000      //default audio rate = 8000
-        else
-            mAudioRate = samplerate
+    fun setAudioFormat(audio_codec: Int, samplerate: Int) {
         mAudioCodec = audio_codec
+        mAudioRate = if (samplerate < 8000 || samplerate > 48000)
+            8000      //default audio rate = 8000
+        else
+            samplerate
     }
 
     fun videoInputReady(): Boolean {
-        if (m_AvailableInputBuffer < 0) {
+        if (mAvailableInputBuffer < 0) {
             try {
-                m_AvailableInputBuffer = mDecoder!!.dequeueInputBuffer(0)
-            } catch (e: IllegalStateException) {
-                Log.d("PWPlayer update", "Illegal State Execption")
-            } catch (e: Exception) {
-                Log.d("PWPlayer update", "other exceptions")
+                mAvailableInputBuffer = mDecoder!!.dequeueInputBuffer(10)
             }
-
+            catch (e: IllegalStateException) {
+                Log.d("PWPlayer update", "Illegal state execption")
+            }
+            catch (e: MediaCodec.CodecException ) {
+                Log.d("PWPlayer update", "Media codec execption")
+            }
+            catch (e: Exception) {
+                Log.d("PWPlayer update", "Other exceptions")
+            }
+            return mAvailableInputBuffer >= 0
         }
-        return m_AvailableInputBuffer >= 0
+        return true
     }
 
     fun videoInput(videoFrame: MediaFrame?): Boolean {
@@ -259,8 +253,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
         if (ilen > 0) {
 
             try {
-                val buffer: ByteBuffer?
-                buffer = mDecoder!!.getInputBuffer(m_AvailableInputBuffer)
+                val buffer: ByteBuffer? = mDecoder!!.getInputBuffer(mAvailableInputBuffer)
 
                 if (ilen > buffer!!.capacity()) {
                     return false
@@ -268,13 +261,13 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
                 buffer.put(videoFrame.array, videoFrame.pos, videoFrame.len)
 
                 mDecoder!!.queueInputBuffer(
-                    m_AvailableInputBuffer,
+                    mAvailableInputBuffer,
                     0,
                     ilen,
                     videoFrame.timestamp * 1000,
                     videoFrame.flags
                 )
-                m_AvailableInputBuffer = -1
+                mAvailableInputBuffer = -1
                 return true
             } catch (e: IllegalStateException) {
 
@@ -286,26 +279,25 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
     val isVideoOutputReady: Boolean
         get() {
-            if (m_AvailableOutputBuffer < 0) {
+            if (mAvailableOutputBuffer < 0) {
                 try {
-                    m_AvailableOutputBuffer = mDecoder!!.dequeueOutputBuffer(m_OutputBufferInfo, 0)
+                    mAvailableOutputBuffer = mDecoder!!.dequeueOutputBuffer(mOutputBufferInfo, 0)
                 } catch (e: IllegalStateException) {
-                    m_AvailableOutputBuffer = -1
+                    mAvailableOutputBuffer = -1
                 }
-
             }
-            return m_AvailableOutputBuffer >= 0
+            return mAvailableOutputBuffer >= 0
         }
 
     val videoTimestamp: Long
-        get() = m_OutputBufferInfo.presentationTimeUs / 1000
+        get() = mOutputBufferInfo.presentationTimeUs / 1000
 
     fun popOutput(render: Boolean): Boolean {
         try {
             if (isVideoOutputReady) {
                 // releases the buffer back to the codec
-                mDecoder!!.releaseOutputBuffer(m_AvailableOutputBuffer, render)
-                m_AvailableOutputBuffer = -1
+                mDecoder!!.releaseOutputBuffer(mAvailableOutputBuffer, render)
+                mAvailableOutputBuffer = -1
                 return true
             }
         } catch (e: IllegalStateException) {
@@ -318,11 +310,10 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
     private fun audioRun_x() {
 
         // init audio track
-        val decode_table: ShortArray
-        if (mAudioCodec.toInt() == 2) {
-            decode_table = alaw_table
+        val decode_table = if (mAudioCodec == 2) {
+            alaw_table
         } else {
-            decode_table = ulaw_table
+            ulaw_table
         }
 
         val audioBufsize = AudioTrack.getMinBufferSize(
@@ -344,9 +335,9 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
         while (!Thread.interrupted() && mDecoder != null) {
             var audioFrame: MediaFrame?
             try {
-                audioFrame = mAudioBuffers!!.poll(1, TimeUnit.SECONDS)
+                audioFrame = mAudioBuffers.poll(50, TimeUnit.MILLISECONDS)
             } catch (e: InterruptedException) {
-                audioFrame = null
+                break ;
             }
 
             if (audioFrame != null) {
@@ -355,16 +346,13 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
                 // audio sync hack for live view
                 var adj = 0
-                if (m_livemode && mAudioBuffers!!.size > 0) {
+                if (m_livemode && mAudioBuffers.size > 0) {
                     adj = 1
                 }
 
                 // decode audio
-                var i: Int
-                i = 0
-                while (i < alen) {
+                for( i in 0 .. alen) {
                     audioBuffer[i] = decode_table[audioFrame.getInt(i)]
-                    i++
                 }
                 audioTrack.write(audioBuffer, 0, alen - adj)
                 audioTimestamp = audioFrame.timestamp
@@ -372,6 +360,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
             }
         }
 
+        mAudioBuffers.clear()
         audioTrack.stop()
         audioTrack.release()
 
@@ -379,7 +368,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
     // keep track of audio frame timestamp
     @Volatile
-    internal var audioTsRef: Long = 0
+    private var audioTsRef: Long = 0
 
     @Volatile
     private var _audioTimestamp: Long = 0
@@ -388,7 +377,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
         get() {
             return if (_audioTimestamp == 0L) 0 else _audioTimestamp + (SystemClock.uptimeMillis() - audioTsRef)
         }
-        set(ts: Long) {
+        set(ts) {
             _audioTimestamp = ts
             audioTsRef = SystemClock.uptimeMillis()
         }
@@ -404,14 +393,14 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
     private fun audioRun() {
 
         var aCodec: MediaCodec?
-        var amime : String
 
+        mAudioBuffers.clear()
         audioTimestamp = 0L
 
-        if (mAudioCodec.toInt() == 2) {
-            amime = "audio/g711-alaw"
+        val amime = if (mAudioCodec == 2) {
+            "audio/g711-alaw"
         } else {
-            amime = "audio/g711-mlaw"
+            "audio/g711-mlaw"
         }
 
         try {
@@ -446,38 +435,36 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
         )
         audioTrack.play()
 
-        var inputBufferId = -1 ;
+        var inputBufferId = -1
 
         while (!Thread.interrupted() && mDecoder != null) {
             if( inputBufferId < 0 )
-                inputBufferId = aCodec.dequeueInputBuffer(10000)
-
-            if (inputBufferId >= 0) {
-                var audioFrame: MediaFrame?
+                inputBufferId = aCodec.dequeueInputBuffer(0)
+            else {
                 try {
-                    audioFrame = mAudioBuffers!!.poll(10, TimeUnit.MILLISECONDS)
-                } catch (e: InterruptedException) {
-                    audioFrame = null
-                }
+                    val audioFrame: MediaFrame? = mAudioBuffers.poll(50, TimeUnit.MILLISECONDS)
 
-                if (audioFrame != null) {
-                    // mediacodec test
-                    val inputBuffer = aCodec.getInputBuffer(inputBufferId)
-                    // fill inputBuffer with valid data
-                    inputBuffer!!.put(audioFrame.array, audioFrame.pos, audioFrame.len)
-                    aCodec.queueInputBuffer(
-                        inputBufferId,
-                        0,
-                        audioFrame.len,
-                        audioFrame.timestamp * 1000,
-                        0
-                    )
-                    inputBufferId = -1
+                    if (audioFrame != null) {
+                        // mediacodec test
+                        val inputBuffer = aCodec.getInputBuffer(inputBufferId)
+                        // fill inputBuffer with valid data
+                        inputBuffer!!.put(audioFrame.array, audioFrame.pos, audioFrame.len)
+                        aCodec.queueInputBuffer(
+                            inputBufferId,
+                            0,
+                            audioFrame.len,
+                            audioFrame.timestamp * 1000,
+                            0
+                        )
+                        inputBufferId = -1
+                    } else {
+                        // no audio frame for 2 seconds?
+                        if (SystemClock.uptimeMillis() - audioTsRef > 2000)
+                            audioTimestamp = 0
+                    }
                 }
-                else {
-                    // no audio frame for 2 seconds?
-                    if(SystemClock.uptimeMillis()-audioTsRef > 2000 )
-                        audioTimestamp = 0
+                catch (e: InterruptedException){
+                    break
                 }
             }
 
@@ -485,7 +472,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
             if (outputBufferId >= 0) {
 
                 // audio sync hack for live view
-                val adj = if (m_livemode && mAudioBuffers!!.size > 0) 2 else 0
+                val adj = if (m_livemode && mAudioBuffers.isNotEmpty()) 2 else 0
 
                 val outputBuffer = aCodec.getOutputBuffer(outputBufferId)
                 //MediaFormat format = aCodec.getOutputFormat(outputBufferId);
@@ -515,22 +502,23 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
         }
 
+        mAudioBuffers.clear()
         audioTrack.stop()
         audioTrack.release()
 
     }
 
     fun audioReady(): Boolean {
-        return mAudioBuffers!!.remainingCapacity() > 1
+        return mAudioBuffers.size < 2
     }
 
     fun audioInput(input: MediaFrame?): Boolean {
         if (input != null) {
-            if (mAudioBuffers!!.remainingCapacity() < 2 ) {
-                mAudioBuffers!!.clear()
+            if (mAudioBuffers.size>2) {
+                mAudioBuffers.clear()
                 Log.d("Audio", "Audio frame skipped.")
             }
-            mAudioBuffers!!.offer(input)
+            mAudioBuffers.offer(input)
             return true
         }
         return false
@@ -541,11 +529,11 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
         // flush video codec
         mDecoder!!.flush()
-        m_AvailableInputBuffer = -1
-        m_AvailableOutputBuffer = -1
+        mAvailableInputBuffer = -1
+        mAvailableOutputBuffer = -1
 
         // flush audio codec
-        mAudioBuffers!!.clear()
+        mAudioBuffers.clear()
         audioTimestamp = 0
 
     }

@@ -1,6 +1,5 @@
 package com.tme_inc.pwv
 
-import android.app.Activity
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Message
@@ -8,7 +7,6 @@ import android.os.Message
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
-import java.security.NoSuchAlgorithmException
 import java.util.Calendar
 import java.util.GregorianCalendar
 
@@ -18,15 +16,14 @@ import java.util.GregorianCalendar
  */
 class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStream(channel) {
 
-    var hashId: String = "c?0"
+    private var hashId: String = "c?0"
 
     private var mPlaybackHandle: Int = 0    // DVR handle for playback
-    private val mClient: DvrClient
 
     var dayList = intArrayOf()
         private set
 
-    private var m_eos = false
+    private var mEOS = false
 
     private var mThread: HandlerThread? = null
     private var mPWHandler: Handler? = null
@@ -35,23 +32,18 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
         get() = mPWHandler != null
 
     val isEndOfStream: Boolean
-        get() = if (m_eos && !videoAvailable()) {
-            true
-        } else false
+        get() = (mEOS && !videoAvailable())
+
+    private val mClient: DvrClient = DvrClient()
 
     init {
-        mClient = DvrClient()
-
         // start Handler thread
         mThread = object : HandlerThread("PWPLAYER") {
             override fun onLooperPrepared() {
                 super.onLooperPrepared()
 
-                mPWHandler = object : Handler() {
-                    override fun handleMessage(msg: Message) {
-                        super.handleMessage(msg)
-                        handlePWMessage(msg)
-                    }
+                mPWHandler = Handler {
+                    handlePWMessage(it)
                 }
                 mPWHandler!!.sendEmptyMessage(MSG_PW_CONNECT)
             }
@@ -86,7 +78,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
             val sdate: Int
             val stime: Int
 
-            if (time < 10000 && dayList.size > 0) {
+            if (time < 10000 && dayList.isNotEmpty() ) {
                 // seek to last date contain video
                 sdate = dayList[dayList.size - 1]
                 stime = 0
@@ -115,7 +107,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
     }
 
     // handle msg on PW Thread
-    internal fun handlePWMessage(msg: Message) {
+    internal fun handlePWMessage(msg: Message) : Boolean {
         when (msg.what) {
             MSG_PW_QUIT  // quit thread
             -> {
@@ -132,13 +124,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
             }
 
             MSG_PW_CONNECT -> if (connect()) {
-                var digester: MessageDigest?
-                try {
-                    digester = MessageDigest.getInstance("MD5")
-                } catch (e: NoSuchAlgorithmException) {
-                    e.printStackTrace()
-                    digester = null
-                }
+                val digester= MessageDigest.getInstance("MD5")
 
                 // get Channel setup
                 // struct  DvrChannel_attr {
@@ -149,14 +135,13 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 // }
                 //
                 //  send REQGETCHANNELSETUP
-                var ans: DvrClient.Ans = mClient.request(14, mChannel)
+                var ans = mClient.request(14, mChannel)
                 if ( ans.code == 11 && ans.size > 0 ) {
                     ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
                     if (ans.dataBuffer.getInt(0) != 0) {
                         resolution = ans.dataBuffer.getInt(68)
                     }
-                    if (digester != null)
-                        digester.update(ans.dataBuffer.array())
+                    digester?.update(ans.dataBuffer.array())
                 }
 
                 // get Channel Info
@@ -170,8 +155,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 if (ans.size > 0 && ans.code == 7) {
                     totalChannels = ans.data
                     if (totalChannels > 0) {
-                        if (digester != null)
-                            digester.update(ans.dataBuffer.array())
+                        digester?.update(ans.dataBuffer.array())
                         mChannelNames = arrayOfNulls(totalChannels)
                         for (i in 0 until totalChannels) {
                             mChannelNames[i] = String(
@@ -238,8 +222,8 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                             onReceiveFrame(ans.dataBuffer)
                     } else {
                         // end of stream?
-                        m_eos = true
-                        return
+                        mEOS = true
+                        return true
                     }
                     mPWHandler!!.sendEmptyMessage(MSG_PW_GETFRAME)
                 } else {
@@ -283,7 +267,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
 
                 val ans = mClient.request(204, mPlaybackHandle, dvrtime)
 
-                m_eos = false
+                mEOS = false
                 if (ans.code == 2 && ans.size >= 40 ) {    // ANSOK : 2
                     // treat file header as a frame
                     onReceiveFrame(ans.dataBuffer)
@@ -315,7 +299,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 dvrtime.putInt(0, msg.arg1 / 10000)           // year
                 dvrtime.putInt(4, msg.arg1 / 100 % 100)      // month
                 dvrtime.putInt(8, msg.arg1 % 100)            // day
-                var ans: DvrClient.Ans = mClient.request(210, mPlaybackHandle, dvrtime)
+                var ans = mClient.request(210, mPlaybackHandle, dvrtime)
                 if (ans.code == 204 && ans.size > 0) {    //ANSSTREAMDAYINFO : 204
                     // struct dayinfoitem {
                     //    int ontime  ;		// seconds of the day
@@ -376,6 +360,7 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 mPWHandler!!.sendEmptyMessage(MSG_PW_CONNECT)
             }
         }
+        return true
     }
 
     private fun connect(): Boolean {

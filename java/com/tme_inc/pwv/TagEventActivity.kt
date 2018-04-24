@@ -17,6 +17,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.TextView
+import kotlinx.android.synthetic.main.activity_tag.*
 
 import java.util.Arrays
 import java.util.Calendar
@@ -47,12 +48,12 @@ class TagEventActivity : Activity() {
             val sPref = prefMan.sharedPreferences
 
             // Empty all prefs
-            val ed = sPref.edit()
-            ed.putString("tag_incident_classification", "")
-            ed.putString("tag_case_number", "")
-            ed.putString("tag_priority", "")
-            ed.putString("tag_notes", "")
-            ed.commit()
+            sPref.edit()
+            .putString("tag_incident_classification", "")
+            .putString("tag_case_number", "")
+            .putString("tag_priority", "")
+            .putString("tag_notes", "")
+            .apply()
 
             // Load the preferences from an XML resource
             addPreferencesFromResource(R.xml.pref_tag_event)
@@ -82,9 +83,9 @@ class TagEventActivity : Activity() {
                         v = "(Please Enter)"
                     }
                 } else {
-                    val editor = pref.editor
-                    editor.putString(key, v)
-                    editor.commit()
+                    pref.editor
+                        .putString(key, v)
+                        .apply()
                 }
                 pref.summary = v
             }
@@ -176,6 +177,16 @@ class TagEventActivity : Activity() {
             val VriSize = result.getInt("VriListSize", 0)
             val VriList = result.getByteArray("VriList")
             if (VriSize > 0 && VriItemSize > 0 && VriList != null) {
+
+                // vri extension
+                fun ByteArray.getVriItem(offset: Int, len: Int ) : String {
+                    return String(
+                        this,
+                        offset,
+                        len
+                    ).split("\u0000")[0].trim()
+                }
+
                 var offset = 0
 
                 val searchdatetime = (DvrDate - 20000000) * 10000 + DvrTime / 100
@@ -191,11 +202,8 @@ class TagEventActivity : Activity() {
                 while (o < VriSize * VriItemSize) {
                     var vridatetime: Long = 0
 
-                    //VRI
-                    m_vri = String( VriList, o,64).split("\u0000")[0].trim()
-
                     // Split vri date/time
-                    val vriarray = m_vri.split("-")
+                    val vriarray = VriList.getVriItem(o,64).split("-")
                     if (vriarray.size > 2) {
                         try {
                             vridatetime = java.lang.Long.parseLong(vriarray[vriarray.size - 2])
@@ -235,54 +243,31 @@ class TagEventActivity : Activity() {
                     o = 0
                 }
 
-
                 offset = o
 
                 var OfficerId = ""
-                m_vri = String(
-                    VriList,
-                    offset,
-                    64
-                ).split("\u0000")[0].trim()
+                m_vri = VriList.getVriItem(offset,64)
+                offset += 64
 
                 // set title
-                val vriTitle = findViewById<View>(R.id.title_vri) as TextView
-                if (vriTitle != null) {
-                    vriTitle.text = "VRI : $m_vri"
-                }
+                title_vri.text = "VRI : $m_vri"
 
                 // splite officer ID from vri
                 val strarray = m_vri.split("-")
                 if (strarray.size > 2) {
                     OfficerId = strarray[strarray.size - 1]
                 }
-                offset += 64
 
                 // incident classification
-                var str = String(
-                    VriList,
-                    offset,
-                    32
-                ).split("\u0000")[0].trim()
-                tagFrag?.setPref("tag_incident_classification", str)
+                tagFrag?.setPref("tag_incident_classification", VriList.getVriItem(offset,32))
                 offset += 32
 
                 // case number
-                str = String(
-                    VriList,
-                    offset,
-                    64
-                ).split("\u0000")[0].trim()
-                tagFrag?.setPref("tag_case_number", str)
+                tagFrag?.setPref("tag_case_number",  VriList.getVriItem(offset,64))
                 offset += 64
 
                 // Priority
-                str = String(
-                    VriList,
-                    offset,
-                    20
-                ).split("\u0000")[0].trim()
-                tagFrag?.setPref("tag_priority", str)
+                tagFrag?.setPref("tag_priority", VriList.getVriItem(offset,20))
                 offset += 20
 
                 // Officer ID
@@ -291,69 +276,47 @@ class TagEventActivity : Activity() {
                 offset += 32    // skip officer ID
 
                 // Notes
-                str = String(
-                    VriList,
-                    offset,
-                    255
-                ).split("\u0000")[0].trim()
-                tagFrag?.setPref("tag_notes", str)
+                tagFrag?.setPref("tag_notes", VriList.getVriItem(offset,255))
 
             }
 
         }
-        return
     }
 
     protected fun onTagEventClick() {
         if (VriItemSize > 0) {
-            val vri = ByteArray(VriItemSize)
-            Arrays.fill(vri, ' '.toByte())
+            val vri = ByteArray(VriItemSize){
+                ' '.toByte()
+            }
 
-            var str: String?
-            var len: Int
+            fun ByteArray.setVriItem(offset: Int, len: Int, sData: String?) : Int {
+                if( sData!=null ) {
+                    val bData = sData!!.toByteArray()
+                    val blen = kotlin.math.min(bData.size, len)
+                    System.arraycopy(bData, 0, this, offset, blen)
+                }
+                return len
+            }
+
             var offset = 0
 
             // Vri
-            val bVri = m_vri.toByteArray()
-            len = bVri.size
-            if (len > 64) len = 64
-            System.arraycopy(bVri, 0, vri, offset, len)
-            offset += 64
+            offset += vri.setVriItem(offset, 64, m_vri)
 
             // incident classification
-            str = tagFrag!!.getPref("tag_incident_classification")
-            val bIncident = str!!.toByteArray()
-            len = bIncident.size
-            if (len > 32) len = 32
-            System.arraycopy(bIncident, 0, vri, offset, len)
-            offset += 32
+            offset += vri.setVriItem(offset, 32, tagFrag!!.getPref("tag_incident_classification"))
 
-            // case number
-            str = tagFrag!!.getPref("tag_case_number")
-            val bCase = str!!.toByteArray()
-            len = bCase.size
-            if (len > 64) len = 64
-            System.arraycopy(bCase, 0, vri, offset, len)
-            offset += 64
+            // case number, size=64
+            offset += vri.setVriItem(offset, 64, tagFrag!!.getPref("tag_case_number"))
 
             // Priority
-            str = tagFrag!!.getPref("tag_priority")
-            val bPrio = str!!.toByteArray()
-            len = bPrio.size
-            if (len > 20) len = 20
-            System.arraycopy(bPrio, 0, vri, offset, len)
-            offset += 20
+            offset += vri.setVriItem(offset, 20, tagFrag!!.getPref("tag_priority"))
 
             // Officer ID
             offset += 32    // skip officer ID
 
             // Notes
-            str = tagFrag!!.getPref("tag_notes")
-            val bNotes = str!!.toByteArray()
-            len = bNotes.size
-            val maxlen = VriItemSize - offset
-            if (len > maxlen) len = maxlen
-            System.arraycopy(bNotes, 0, vri, offset, len)
+            offset += vri.setVriItem(offset, VriItemSize - offset, tagFrag!!.getPref("tag_notes"))
 
             // set VRI
             if (mPwProtocol != null) {

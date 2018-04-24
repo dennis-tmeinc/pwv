@@ -41,25 +41,13 @@ class Launcher : Activity() {
     }
 
     private fun savePref() {
-        val prefs = getSharedPreferences("pwv", 0)
-        val ed = prefs.edit()
-        var editText = findViewById<View>(R.id.OfficerID) as EditText
-        var str = editText.text.toString()
-        ed.putString("officerId", str)
-
-        editText = findViewById<View>(R.id.DVRIPAddress) as EditText
-        str = editText.text.toString()
-        ed.putString("dvrIp", str)
-
-        ed.putInt("dvrPort", mdvrPort)
-
-        ed.putInt("channel", 0)
-
-        val cbAutoStart = findViewById<View>(R.id.autostart) as CheckBox
-        val autoStart = cbAutoStart.isChecked
-        ed.putBoolean("AutoStart", autoStart)
-
-        ed.commit()
+        getSharedPreferences("pwv", 0).edit()
+            .putString("officerId", OfficerID.text.toString())
+            .putString("dvrIp", DVRIPAddress.text.toString())
+            .putInt("dvrPort", mdvrPort)
+            .putInt("channel", 0)
+            .putBoolean("AutoStart", autostart.isChecked)
+            .apply()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -77,12 +65,10 @@ class Launcher : Activity() {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
-        val id = item.itemId
-
-
-        return if (id == R.id.action_settings) {
+        return if (item.itemId == R.id.action_settings)
             true
-        } else super.onOptionsItemSelected(item)
+        else
+            super.onOptionsItemSelected(item)
 
     }
 }

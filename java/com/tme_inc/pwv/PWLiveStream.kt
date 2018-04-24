@@ -53,8 +53,6 @@ class PWLiveStream(channel: Int) : PWStream(channel) {
                     continue
                 } else {
                     try {
-                        var ans: DvrClient.Ans
-
                         var digester: MessageDigest?
                         try {
                             digester = MessageDigest.getInstance("MD5")
@@ -75,7 +73,7 @@ class PWLiveStream(channel: Int) : PWStream(channel) {
                         // }
                         //
                         //  send REQGETCHANNELSETUP
-                        ans = dvrClient.request(14, mChannel)
+                        var ans = dvrClient.request(14, mChannel)
                         if (ans.size>0 && ans.code == 11) {
                             ans.dataBuffer.order(ByteOrder.LITTLE_ENDIAN)
                             if (ans.dataBuffer.getInt(0) != 0)
