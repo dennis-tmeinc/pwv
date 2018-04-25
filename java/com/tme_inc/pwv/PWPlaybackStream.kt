@@ -154,17 +154,13 @@ class PWPlaybackStream(channel: Int, private var mUIHandler: Handler?) : PWStrea
                 ans = mClient.request(4)
                 if (ans.size > 0 && ans.code == 7) {
                     totalChannels = ans.data
-                    if (totalChannels > 0) {
-                        digester?.update(ans.dataBuffer.array())
-                        mChannelNames = arrayOfNulls(totalChannels)
-                        for (i in 0 until totalChannels) {
-                            mChannelNames[i] = String(
-                                ans.dataBuffer.array(),
-                                ans.dataBuffer.arrayOffset() + ans.dataBuffer.position() + 72 * i + 8,
-                                64,
-                                Charsets.UTF_8
-                            ).split("\u0000")[0]
-                        }
+                    mChannelNames.clear()
+                    for (i in 0 until totalChannels) {
+                        mChannelNames.add( String(
+                            ans.dataBuffer.array(),
+                            ans.dataBuffer.arrayOffset() + ans.dataBuffer.position() + 72 * i + 8,
+                            64)
+                            .split("\u0000")[0].trim())
                     }
                 }
 

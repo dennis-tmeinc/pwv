@@ -34,7 +34,7 @@ class PWLiveStream(channel: Int) : PWStream(channel) {
     override val isRunning: Boolean
         get() = mThread != null && mThread!!.isAlive
 
-    internal inner class PWLiveThread : Thread() {
+    inner class PWLiveThread : Thread() {
         var mRunning: Boolean = false
 
         override fun run() {
@@ -93,19 +93,14 @@ class PWLiveStream(channel: Int) : PWStream(channel) {
                         ans = dvrClient.request(4)
                         if (ans.code == 7) {
                             totalChannels = ans.data
+                            mChannelNames.clear()
                             if (ans.size > 0) {
-                                if (digester != null)
-                                    digester.update(ans.dataBuffer.array())
-                                mChannelNames = Array<String?>(totalChannels,{""})
-                                synchronized(this) {
-                                    for (i in 0 until totalChannels) {
-                                        mChannelNames[i] = String(
-                                            ans.dataBuffer.array(),
-                                            ans.dataBuffer.arrayOffset() + ans.dataBuffer.position() + 72 * i + 8,
-                                            64,
-                                            Charsets.UTF_8
-                                        ).split("\u0000")[0]
-                                    }
+                                for (i in 0 until totalChannels) {
+                                    mChannelNames.add( String(
+                                        ans.dataBuffer.array(),
+                                        ans.dataBuffer.arrayOffset() + ans.dataBuffer.position() + 72 * i + 8,
+                                        64
+                                        ).split("\u0000")[0].trim() )
                                 }
                             }
                         }

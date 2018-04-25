@@ -34,6 +34,7 @@ open class PwvSocket( s: Socket? = null) : Closeable {
         return isConnected
     }
 
+    @Synchronized
     override fun close() {
         if (mSocket != null) {
             try {
@@ -108,7 +109,7 @@ open class PwvSocket( s: Socket? = null) : Closeable {
         val buffer = ByteArray(8192)
         var r: Int = 0                  // total read bytes
         while (r < buffer.size && recv1(buffer, r, 1) > 0) {
-            if (buffer[r] == '\n'.toByte() || buffer[r].toInt() == 0) {
+            if (buffer[r] == '\n'.toByte() || buffer[r] == 0.toByte()) {
                 // received a line
                 break
             }
@@ -117,7 +118,6 @@ open class PwvSocket( s: Socket? = null) : Closeable {
         return String(buffer, 0, r)
     }
 
-    @JvmOverloads
     fun send(buffer: ByteArray, offset: Int = 0, count: Int = buffer.size - offset): Int {
         if (mSocket != null) {
             try {

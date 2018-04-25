@@ -22,7 +22,7 @@ class OfficerIdDialog : DialogFragment() {
         val baseView = activity.layoutInflater.inflate(R.layout.dialog_officerid, null)
 
         if (savedInstanceState == null) {
-            mPwProtocol.GetOfficerIDList({ result ->
+            mPwProtocol.getOfficerIDList({ result ->
                 if (baseView != null && result != null) {
                     val nid = result.getInt("policeId_number", 0)
                     val nidlen = result.getInt("policeId_size")
@@ -64,7 +64,7 @@ class OfficerIdDialog : DialogFragment() {
             .setPositiveButton("OK") { dialog, id ->
                 val offierid = baseView.e_officerid.text.toString()
 
-                mPwProtocol.SetOfficerId(offierid)
+                mPwProtocol.setOfficerId(offierid)
 
                 activity.getSharedPreferences("pwv", 0)
                     .edit()

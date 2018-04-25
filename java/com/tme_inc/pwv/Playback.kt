@@ -131,7 +131,7 @@ class Playback : PwViewActivity() {
             //vriDialog.show(getFragmentManager(), "tagVriEvent");
             val dSearch = VideoDatesDialog()
             dSearch.dateList =  (mstream as PWPlaybackStream).dayList
-            dSearch.uiHandler = m_UIhandler as Handler
+            dSearch.uiHandler = m_UIhandler
             dSearch.show(fragmentManager, "tagVideoDates")
         }
 
@@ -139,11 +139,12 @@ class Playback : PwViewActivity() {
         button_play.setOnClickListener {
             if (m_playSpeed > 1) {
                 m_playSpeed = 1
-                (findViewById<View>(R.id.button_play) as ImageButton).setImageResource(R.drawable.play_play)
+                button_play.setImageResource(R.drawable.play_play)
                 showHint("Paused")
-            } else {
+            }
+            else {
                 m_playSpeed = 1000         // normal play speed
-                (findViewById<View>(R.id.button_play) as ImageButton).setImageResource(R.drawable.play_pause)
+                button_play.setImageResource(R.drawable.play_pause)
                 showHint("Play")
             }
         }
@@ -176,7 +177,7 @@ class Playback : PwViewActivity() {
         // forward step
         button_step.setOnClickListener {
             m_playSpeed = 1
-            (findViewById<View>(R.id.button_play) as ImageButton).setImageResource(R.drawable.play_pause)
+            button_play.setImageResource(R.drawable.play_pause)
         }
 
         btPlayMode.setOnClickListener {
@@ -332,7 +333,7 @@ class Playback : PwViewActivity() {
             } else if (m_playSpeed == 1) {
                 rendered = mplayer!!.popOutput(true)        // pop one frame
                 mTimeBar?.pos = frametime
-                (findViewById<View>(R.id.button_play) as ImageButton).setImageResource(R.drawable.play_play)
+                button_play.setImageResource(R.drawable.play_play)
                 m_playSpeed = 0               // paused
                 refFrameTime = frametime
                 refTime = totalTime

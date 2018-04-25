@@ -57,17 +57,17 @@ class LoginActivity : Activity() {
 
     protected fun onSignIn() {
         val protocol = PWProtocol()
-        protocol.RemoteLogin( {
+        protocol.remoteLogin( {
                 result : Bundle? ->
                 if (result == null || result.getString("sessionId", "0").length < 2) {
                     alertLoginError()
-                    return@RemoteLogin
+                    return@remoteLogin
                 }
 
                 m_numDevice = result.getInt("numberOfDevices", 0)
                 if (m_numDevice < 1) {
                     alertNoDevice()
-                    return@RemoteLogin
+                    return@remoteLogin
                 }
 
                 m_sessionId = result.getString("sessionId")

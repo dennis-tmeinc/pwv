@@ -104,7 +104,7 @@ class TagEventDialog : DialogFragment() {
 
                     // set VRI
                     if (mPwProtocol != null) {
-                        mPwProtocol!!.SetVri(vri)
+                        mPwProtocol!!.setVri(vri)
                     }
 
                 }
@@ -136,7 +136,7 @@ class TagEventDialog : DialogFragment() {
 
         mPwProtocol = PWProtocol()
         if (savedInstanceState == null) {
-            mPwProtocol!!.GetVri( { result ->
+            mPwProtocol!!.getVri( { result ->
                 if (mBaseView != null && result != null) {
                     VriItemSize = result.getInt("VriItemSize", 0)
                     val VriSize = result.getInt("VriListSize", 0)

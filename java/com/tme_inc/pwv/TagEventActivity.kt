@@ -147,7 +147,7 @@ class TagEventActivity : Activity() {
         // init PW event processor
         //
         mPwProtocol = PWProtocol()
-        mPwProtocol!!.GetVri { result -> onTagPWEvent(result) }
+        mPwProtocol!!.getVri { result -> onTagPWEvent(result) }
 
 
         var button = findViewById<View>(R.id.button_tag) as Button
@@ -320,7 +320,7 @@ class TagEventActivity : Activity() {
 
             // set VRI
             if (mPwProtocol != null) {
-                mPwProtocol!!.SetVri(vri)
+                mPwProtocol!!.setVri(vri)
             }
 
         }

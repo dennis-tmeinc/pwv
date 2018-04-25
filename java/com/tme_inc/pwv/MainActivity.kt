@@ -39,7 +39,7 @@ class MainActivity : Activity() {
     protected val PWVFileId = "0B3EjTUrzgBepalpMbG1GdGJvMlU"
     internal var updateTask: UpdateTask? = null
     internal var m_sessionId: String = ""
-    internal val m_deviceList = ArrayList<device>()
+    internal val m_deviceList = ArrayList<Device>()
 
     private var m_connectMode: Int = 0
     private var m_dvrIp: String = ""
@@ -48,19 +48,22 @@ class MainActivity : Activity() {
 
     private var m_run = false
 
-    class device( val name: String, val id : String ) {
+    class Device( val name: String, val id : String ) {
         var update = true
 
         override fun toString(): String {
             return name
         }
 
+        override fun hashCode(): Int {
+            return "$name.$id".hashCode()
+        }
+
         override fun equals(other: Any?): Boolean {
-            if( other is device ) {
-                return id.equals(other.id) && name.equals(other.name)
-            }
+            return if( other is Device )
+                id.equals(other.id) && name.equals(other.name)
             else
-                return false
+                false
         }
     }
 
@@ -122,7 +125,7 @@ class MainActivity : Activity() {
         toast.show()
     }
 
-    internal fun checkForUpdates(manual: Boolean) {
+    private fun checkForUpdates(manual: Boolean) {
         // start auto update task
         if (updateTask == null) {
             updateTask = UpdateTask()
@@ -181,22 +184,29 @@ class MainActivity : Activity() {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
-        val id = item.itemId
+        when ( item.itemId ) {
 
-        if (id == R.id.action_settings) {
-            // Intent intent = new Intent(getBaseContext(), Launcher.class);
-            val intent = Intent(baseContext, SettingsActivity::class.java)
-            startActivity(intent)
-            return true
+            R.id.action_settings -> {
+                // Intent intent = new Intent(getBaseContext(), Launcher.class);
+                val intent = Intent(baseContext, SettingsActivity::class.java)
+                startActivity(intent)
+                return true
+            }
+
+            R.id.action_checkupdate -> {
+                checkForUpdates(true)
+            }
+
+            R.id.action_about -> {
+                val aboutDialog = AboutDialogFragment()
+                aboutDialog.show(fragmentManager, "tagAbout")
+            }
+
+            else -> {
+                return super.onOptionsItemSelected(item)
+            }
         }
-        else if (id == R.id.action_checkupdate) {
-            checkForUpdates(true)
-        }
-        else if (id == R.id.action_about) {
-            val aboutDialog = AboutDialogFragment()
-            aboutDialog.show(fragmentManager, "tagAbout")
-        }
-        return super.onOptionsItemSelected(item)
+        return true
     }
 
     protected fun alertLoginError() {
@@ -267,7 +277,7 @@ class MainActivity : Activity() {
         }
     }
 
-    internal fun setButtonColor() {
+    private fun setButtonColor() {
         var color1: Int
         var color2: Int
         var color3: Int
@@ -276,9 +286,11 @@ class MainActivity : Activity() {
         color1 = color2
         if (m_connectMode == DvrClient.CONN_USB) {
             color1 = R.color.button_selected
-        } else if (m_connectMode == DvrClient.CONN_REMOTE) {
+        }
+        else if (m_connectMode == DvrClient.CONN_REMOTE) {
             color2 = R.color.button_selected
-        } else {
+        }
+        else {
             color3 = R.color.button_selected
         }
 
@@ -288,28 +300,26 @@ class MainActivity : Activity() {
     }
 
     private fun updateLocalDevice() {
-        m_pwProtocol.DeviceList( { result ->
-            if (result != null) {
-                if (result.getBoolean("Complete", true)) {
-                    // complete
-                    devicelist.postDelayed({ updateDeviceList() }, 15000)
+        m_pwProtocol.getDeviceList( { result ->
+            if (result.getBoolean("Complete", true)) {
+                // complete
+                devicelist.postDelayed({ updateDeviceList() }, 15000)
 
-                    for( i in m_deviceList.size-1 downTo 0){
-                        if( !m_deviceList[i].update )
-                            m_deviceList.removeAt(i)
-                    }
+                for( i in m_deviceList.size-1 downTo 0){
+                    if( !m_deviceList[i].update )
+                        m_deviceList.removeAt(i)
                 }
-                else {
-                    val ip = result.getString("deviceIP")
-                    val name = result.getString("deviceName")
-
-                    val de = device( name, ip )
-                    m_deviceList.remove(de)
-                    m_deviceList.add(de)
-                }
-
-                updateNameList()
             }
+            else {
+                val ip = result.getString("deviceIP")
+                val name = result.getString("deviceName")
+
+                val de = Device( name, ip )
+                m_deviceList.remove(de)
+                m_deviceList.add(de)
+            }
+
+            updateNameList()
         }, m_dvrIp)
     }
 
@@ -322,21 +332,21 @@ class MainActivity : Activity() {
         } else {
             user = prefs.getString("loginUser", "nouser")
         }
-        if (user!!.length == 0) {
+        if (user!!.isBlank()) {
             user = "EMPTY"
         }
         var pass = prefs.getString("loginKey", "nokey")
-        if (pass!!.length == 0) {
+        if (pass!!.isBlank()) {
             pass = "EMPTY"
         }
         var accessKey = prefs.getString("accessKey", "")
-        if (accessKey!!.length == 0) {
+        if (accessKey!!.isBlank()) {
             accessKey = "EMPTY"
         }
 
         m_pwProtocol.connectMode = m_connectMode
 
-        m_pwProtocol.RemoteLogin(
+        m_pwProtocol.remoteLogin(
             { result ->
                 m_deviceList.clear()
 
@@ -350,7 +360,7 @@ class MainActivity : Activity() {
                     m_sessionId = result.getString("sessionId")
                     for (i in 0 until numDevice) {
                         m_deviceList.add(
-                            device(
+                            Device(
                                 result.getString("name$i"),
                                 result.getString("id$i")
                             )

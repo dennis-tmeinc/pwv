@@ -43,6 +43,8 @@ class PWProtocol : DvrClient() {
     protected abstract inner class PWTask<T1>(protected val mlistener:  ( Bundle ) -> Unit )
         : AsyncTask<T1, String, Bundle>() {
 
+        protected val result = Bundle()
+
         override fun onPreExecute() {
             super.onPreExecute()
             mTask = this
@@ -67,7 +69,6 @@ class PWProtocol : DvrClient() {
             var vri_s : Int
             var vri_rsize = 468
 
-            var result = Bundle()
             // REQ:
             // REQGETDATA   (302)
             // PROTOCOL_PW_GETVRILISTSIZE	(1004)
@@ -82,7 +83,7 @@ class PWProtocol : DvrClient() {
                 ).split("\u0000")[0]
                 val vris =
                     vrisize.split(",")
-                if (vris.size > 0) {
+                if (vris.isNotEmpty()) {
                     vri_s = Integer.parseInt(vris[0])
                     result.putInt("VriListSize", vri_s)
                 }
@@ -108,16 +109,14 @@ class PWProtocol : DvrClient() {
         }
     }
 
-    fun GetVri(complete: ( Bundle ) -> Unit ) {
+    fun getVri(complete: ( Bundle ) -> Unit ) {
         GetVriTask(complete).execute()
     }
 
     private inner class SetVriTask(listener: ( Bundle ) -> Unit ) : PWTask<ByteArray>(listener) {
 
         override fun doInBackground(vararg vridata: ByteArray): Bundle? {
-            var result: Bundle? = null
-            if (vridata.size > 0 && vridata[0].size > 0) {
-                result = Bundle()
+            if (vridata.isNotEmpty() && vridata[0].isNotEmpty()) {
                 // REQ:
                 // REQSENDDATA   (301)
                 // PROTOCOL_PW_SETVRILIST		(1006)
@@ -134,7 +133,7 @@ class PWProtocol : DvrClient() {
         }
     }
 
-    fun SetVri(vridata: ByteArray, complete: ( Bundle ) -> Unit = {} ) {
+    fun setVri(vridata: ByteArray, complete: ( Bundle ) -> Unit = {} ) {
         SetVriTask(complete).execute(vridata)
     }
 
@@ -142,8 +141,6 @@ class PWProtocol : DvrClient() {
     private inner class GetOfficerIDListTask(listener: ( Bundle ) -> Unit ) : PWTask<Void>(listener) {
 
         override fun doInBackground(vararg aVoid: Void): Bundle {
-            var result = Bundle()
-
             // REQ:
             // REQGETDATA   (302)
             // PROTOCOL_PW_GETPOLICEIDLIST	(1002)
@@ -162,7 +159,7 @@ class PWProtocol : DvrClient() {
 
     }
 
-    fun GetOfficerIDList(complete: ( Bundle ) -> Unit ) {
+    fun getOfficerIDList(complete: ( Bundle ) -> Unit ) {
         GetOfficerIDListTask(complete).execute()
     }
 
@@ -170,12 +167,10 @@ class PWProtocol : DvrClient() {
     private inner class SetOfficerIdTask(listener: ( Bundle ) -> Unit ) : PWTask<String>(listener) {
 
         override fun doInBackground(vararg oids: String): Bundle? {
-            var result: Bundle? = null
             if (oids.isNotEmpty()) {
                 val officerId = oids[0] + "\u0000"   // append null terminate
                 val oidarray = officerId.toByteArray()
 
-                result = Bundle()
                 // REQ:
                 // REQSENDDATA   (301)
                 // PROTOCOL_PW_SETPOLICEID		(1003)
@@ -191,7 +186,7 @@ class PWProtocol : DvrClient() {
         }
     }
 
-    fun SetOfficerId(officerId: String, complete: ( Bundle ) -> Unit = {} ) {
+    fun setOfficerId(officerId: String, complete: ( Bundle ) -> Unit = {} ) {
         SetOfficerIdTask(complete).execute(officerId)
     }
 
@@ -199,9 +194,7 @@ class PWProtocol : DvrClient() {
     private inner class SendPWKeyTask(listener: ( Bundle ) -> Unit ) : PWTask<Int>(listener) {
 
         override fun doInBackground(vararg keys: Int?): Bundle? {
-            var result: Bundle? = null
             if (keys.size > 0) {
-                result = Bundle()
                 // REQ:
                 // REQ2KEYPAD   (230)
                 val ans = request(230, keys[0]!!)
@@ -216,7 +209,7 @@ class PWProtocol : DvrClient() {
         }
     }
 
-    fun SendPWKey(keycode: Int, complete: ( Bundle ) -> Unit = {} ) {
+    fun sendPWKey(keycode: Int, complete: ( Bundle ) -> Unit = {} ) {
         SendPWKeyTask(complete).execute(keycode)
     }
 
@@ -240,11 +233,11 @@ class PWProtocol : DvrClient() {
                 // ANS: (ignored)
                 // ANSOK   (2)\
             }
-            return Bundle()
+            return result
         }
     }
 
-    fun SetCovertMode(covert: Boolean) {
+    fun setCovertMode(covert: Boolean) {
         SetCovertTask().execute(covert)
     }
 
@@ -252,8 +245,6 @@ class PWProtocol : DvrClient() {
     private inner class GetPWStatusTask(listener: ( Bundle ) -> Unit ) : PWTask<Void>(listener) {
 
         override fun doInBackground(vararg avoid: Void): Bundle? {
-            var result = Bundle()
-
             // REQ:
             // REQGETDATA   (302)
             // PROTOCOL_PW_GETSTATUS   	(1001)
@@ -295,7 +286,7 @@ class PWProtocol : DvrClient() {
         }
     }
 
-    fun GetPWStatus(complete: ( Bundle ) -> Unit ) {
+    fun getPWStatus(complete: ( Bundle ) -> Unit ) {
         GetPWStatusTask(complete).execute()
     }
 
@@ -303,7 +294,6 @@ class PWProtocol : DvrClient() {
     private inner class RemoteLoginTask(listener: ( Bundle ) -> Unit ) : PWTask<String>(listener) {
 
         override fun doInBackground(vararg params: String): Bundle? {
-            val result = Bundle()
             var res = true
 
             // connect to remote server directly
@@ -311,7 +301,7 @@ class PWProtocol : DvrClient() {
                 var nonce = "nonce"
 
                 sendLine("session\n")
-                var fields = recvLine().split(Regex( "\\s+" ))
+                var fields = recvLine().split(Regex( "\\s+" )).dropLastWhile { it.isBlank() }
                 if (fields.size >= 2 && fields[0].compareTo("try") == 0) {
                     nonce = fields[1]
                 }
@@ -333,8 +323,8 @@ class PWProtocol : DvrClient() {
                     } catch (e: NoSuchAlgorithmException) {
                     }
 
-                    sendLine(String.format("session %s %s %s %s\n", params[0], key, params[2], mId))
-                    fields = recvLine().split(Regex( "\\s+" ))
+                    sendLine("session ${params[0]} $key ${params[2]} $mId\n")
+                    fields = recvLine().split(Regex( "\\s+" )).dropLastWhile { it.isBlank() }
                     if (fields.size < 2 || fields[0].compareTo("ok") != 0) {
                         res = false
                     }
@@ -342,12 +332,12 @@ class PWProtocol : DvrClient() {
 
                 if (res ) {
                     result.putString("sessionId", fields[1])
-                    sendLine(String.format("list %s *\n", fields[1]))
-                    fields = recvLine().split(Regex("\\s+"))
-                    if (fields.size > 0 && fields[0].compareTo("rlist") == 0) {
+                    sendLine( "list ${fields[1]} *\n")
+                    fields = recvLine().split(Regex( "\\s+" )).dropLastWhile { it.isBlank() }
+                    if (fields.isNotEmpty() && fields[0] == "rlist") {
                         var i = 0
                         while (i < 1000) {
-                            val lfields = recvLine().split(Regex("\\s+"))
+                            val lfields = recvLine().split(Regex( "\\s+" )).dropLastWhile { it.isBlank() }
                             if (lfields.size < 2) {
                                 break
                             }
@@ -366,7 +356,7 @@ class PWProtocol : DvrClient() {
         }
     }
 
-    fun RemoteLogin(complete: ( Bundle ) -> Unit , user: String, pass: String, accesskey: String) {
+    fun remoteLogin(complete: ( Bundle ) -> Unit , user: String, pass: String, accesskey: String) {
         RemoteLoginTask(complete).execute(user, pass, accesskey)
     }
 
@@ -374,7 +364,6 @@ class PWProtocol : DvrClient() {
     private inner class DeviceListTask(listener: ( Bundle ) -> Unit ) : PWTask<String>(listener) {
 
         override fun doInBackground(vararg params: String): Bundle {
-            val result = Bundle()
             try {
                 // data packet
                 //  REQDVREX	0x7986a348
@@ -413,7 +402,7 @@ class PWProtocol : DvrClient() {
                 )
 
                 // send to unicast to preset server ( over internet, maybe )
-                if (params.size > 0 && params[0].length > 1) {
+                if (params.isNotEmpty() && params[0].isNotBlank()) {
                     udpSocket.send(
                         DatagramPacket(
                             packet,
@@ -488,7 +477,7 @@ class PWProtocol : DvrClient() {
         }
     }
 
-    fun DeviceList(listener: ( Bundle ) -> Unit , host: String) {
+    fun getDeviceList(listener: ( Bundle ) -> Unit , host: String) {
         DeviceListTask(listener).execute(host)
     }
 
@@ -496,7 +485,6 @@ class PWProtocol : DvrClient() {
     private inner class WebUrlTask(listener: ( Bundle ) -> Unit ) : PWTask<String>(listener) {
 
         override fun doInBackground(vararg params: String): Bundle? {
-            val result = Bundle()
             result.putString("URL", httpUrl)
             result.putBoolean("Complete", true)
             return result
@@ -504,7 +492,7 @@ class PWProtocol : DvrClient() {
 
     }
 
-    fun GetWebUrl(complete: ( Bundle ) -> Unit ) {
+    fun getWebUrl(complete: ( Bundle ) -> Unit ) {
         WebUrlTask(complete).execute()
     }
 
@@ -550,7 +538,6 @@ class PWProtocol : DvrClient() {
             }
 
 
-            val result = Bundle()
             result.putBoolean("Complete", true)
             return result
         }
@@ -574,7 +561,6 @@ class PWProtocol : DvrClient() {
     private inner class DayListTask(listener: ( Bundle ) -> Unit ) : PWTask<Int>(listener) {
 
         override fun doInBackground(vararg params: Int?): Bundle? {
-            val result = Bundle()
 
             // REQDAYLIST   (238)
             val ans = request(238)

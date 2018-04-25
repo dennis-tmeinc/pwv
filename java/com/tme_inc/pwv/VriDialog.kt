@@ -36,7 +36,7 @@ class VriDialog : DialogFragment() {
 
         mPwProtocol = PWProtocol()
         if (savedInstanceState == null) {
-            mPwProtocol!!.GetVri( { result ->
+            mPwProtocol!!.getVri( { result ->
                 if (mBaseView != null && result != null) {
                     VriItemSize = result.getInt("VriItemSize", 0)
                     val VriSize = result.getInt("VriListSize", 0)

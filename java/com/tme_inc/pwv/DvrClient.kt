@@ -34,7 +34,7 @@ open class DvrClient : PwvSocket() {
                 connect(loginServer, loginPort)
                 if (isConnected) {
                     sendLine("vserver $loginSessionId $loginTargetId 80\n")
-                    val fields = recvLine().split(Regex("\\s+"))
+                    val fields = recvLine().split(Regex("\\s+")).dropLastWhile { it.isBlank() }
                     if (fields.size >= 3 && fields[0] == "ok") {
                         r = if (fields[1] == "*")
                                 "http://$loginServer:${fields[2]}/"
@@ -48,7 +48,7 @@ open class DvrClient : PwvSocket() {
         }
 
     var connectMode: Int = 0
-        set(mode: Int) {
+        set(mode) {
             field = mode
 
             val prefs = appCtx!!.getSharedPreferences("pwv", 0)

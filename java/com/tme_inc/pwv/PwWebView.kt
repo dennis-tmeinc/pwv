@@ -24,8 +24,8 @@ class PwWebView : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pw_web_view)
 
-        val webSettings = webview!!.settings
-        webSettings.javaScriptEnabled = true
+        webview!!.settings.javaScriptEnabled = true
+
         webview.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                 try {

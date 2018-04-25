@@ -170,9 +170,9 @@ class Liveview : PwViewActivity() {
             // urn screen off (auto off)
             if (appmode != xappmod) {
                 if (appmode <= 2) {
-                    screen_KeepOn(true)               // put screen to sleep if device pass shutdown delay
+                    screenKeepOn(true)               // put screen to sleep if device pass shutdown delay
                 } else {
-                    screen_KeepOn(false)               // put screen to sleep if device pass shutdown delay
+                    screenKeepOn(false)               // put screen to sleep if device pass shutdown delay
                 }
                 xappmod = appmode
             }
@@ -183,7 +183,7 @@ class Liveview : PwViewActivity() {
         // diskinfo:  disk,mounted,total,free,full,l_len,n_len,reserved
 
         /// DISPLAY DISK1
-        if (di.size > 0 && di[0].length > 10) {
+        if (di.isNotEmpty() && di[0].length > 10) {
             val scanner = Scanner(di[0])
             scanner.useDelimiter(",")
 
@@ -365,7 +365,7 @@ class Liveview : PwViewActivity() {
         button_covert.setOnClickListener {
             m_covertmode = true
 
-            mPwProtocol!!.SetCovertMode(true)
+            mPwProtocol.setCovertMode(true)
 
             // Show Covert Screen
             val intent = Intent(baseContext, CovertScreenActivity::class.java)
@@ -378,33 +378,32 @@ class Liveview : PwViewActivity() {
         }
 
         button_cam1.setOnClickListener {
-            mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_C1_DOWN, {})
+            mPwProtocol.sendPWKey(PWProtocol.PW_VK_C1_DOWN, {})
             (it as ImageButton).setImageResource(R.drawable.pw_cam1_trans)
             mStatusTime = 0
         }
 
         button_cam2.setOnClickListener {
-            mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_C2_DOWN, {})
+            mPwProtocol.sendPWKey(PWProtocol.PW_VK_C2_DOWN, {})
             (it as ImageButton).setImageResource(R.drawable.pw_cam2_trans)
             mStatusTime = 0
         }
 
         button_tm.setOnClickListener {
-            mPwProtocol!!.SendPWKey(PWProtocol.PW_VK_TM_DOWN, {})
+            mPwProtocol.sendPWKey(PWProtocol.PW_VK_TM_DOWN, {})
             mStatusTime = 0
         }
 
         button_lp.setOnClickListener {
-            var selected = (it as ImageButton).isSelected
+            val selected = (it as ImageButton).isSelected
             it.isSelected = !selected
-            selected = (it as ImageButton).isSelected
 
-            if (selected) {
-                mPwProtocol.SendPWKey(PWProtocol.PW_VK_LP_DOWN, {})
+            if (it.isSelected) {
+                mPwProtocol.sendPWKey(PWProtocol.PW_VK_LP_DOWN, {})
                 m_UIhandler?.sendEmptyMessageDelayed(MSG_PW_LPOFF, 5000)
             } else {
                 m_UIhandler?.removeMessages(MSG_PW_LPOFF)
-                mPwProtocol.SendPWKey(PWProtocol.PW_VK_LP_UP)
+                mPwProtocol.sendPWKey(PWProtocol.PW_VK_LP_UP)
             }
 
             mStatusTime = 0
@@ -422,11 +421,12 @@ class Liveview : PwViewActivity() {
             } else if (msg.what == MSG_PW_LPOFF) {
                 if ( button_lp.isSelected ) {
                     button_lp.isSelected = false
-                    mPwProtocol?.SendPWKey(PWProtocol.PW_VK_LP_UP)
+                    mPwProtocol.sendPWKey(PWProtocol.PW_VK_LP_UP)
                 }
             }
             true
         })
+
     }
 
     override fun onResume() {
@@ -437,7 +437,7 @@ class Liveview : PwViewActivity() {
         val useLogin = prefs.getBoolean("login", false)
         val officerId = prefs.getString("officerId", "")
         if (!useLogin && officerId.isNotBlank()) {
-            mPwProtocol!!.SetOfficerId(officerId)
+            mPwProtocol.setOfficerId(officerId)
         }
 
         // save live screen active flag
@@ -447,7 +447,7 @@ class Liveview : PwViewActivity() {
 
         if (m_covertmode) {
             m_covertmode = false
-            mPwProtocol!!.SetCovertMode(false)
+            mPwProtocol.setCovertMode(false)
         }
 
     }
@@ -471,9 +471,9 @@ class Liveview : PwViewActivity() {
             return
         }
         else if (mplayer == null) {
-            val cn = mstream!!.channelName
-            if (cn != null)
-                loadingText.text = cn
+
+            loadingText.text = mstream!!.channelName
+
             if (mstream!!.videoAvailable()) {
                 m_totalChannel = mstream!!.totalChannels
                 //startActivity(new Intent(getBaseContext(), Playback.class));
@@ -535,9 +535,9 @@ class Liveview : PwViewActivity() {
 
         // PW status update
         mStatusTime += deltaTime
-        if (mStatusTime > 1000 && !mPwProtocol!!.isBusy) {       // every second
+        if (mStatusTime > 1000 && !mPwProtocol.isBusy) {       // every second
             mStatusTime = 0
-            mPwProtocol!!.GetPWStatus(pwStatusListener)
+            mPwProtocol.getPWStatus(pwStatusListener)
         }
         return
     }
@@ -553,35 +553,41 @@ class Liveview : PwViewActivity() {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
-        val id = item.itemId
+        when( item.itemId ) {
+            R.id.action_settings -> {
+                //Intent intent = new Intent(getBaseContext(), Launcher.class);
+                val intent = Intent(baseContext, SettingsActivity::class.java)
+                startActivity(intent)
+            }
 
+            R.id.action_playback -> {
+                val intent = Intent(baseContext, Playback::class.java)
+                startActivity(intent)
+                finish()
+            }
 
-        if (id == R.id.action_settings) {
-            //Intent intent = new Intent(getBaseContext(), Launcher.class);
-            val intent = Intent(baseContext, SettingsActivity::class.java)
-            startActivity(intent)
-            return true
-        } else if (id == R.id.action_playback) {
-            val intent = Intent(baseContext, Playback::class.java)
-            startActivity(intent)
-            finish()
-            return true
-        } else if (id == R.id.device_setup) {
-            mPwProtocol!!.GetWebUrl { result ->
-                val url = result.getString("URL")
-                if (url != null) {
-                    val intent = Intent(baseContext, PwWebView::class.java)
-                    intent.putExtra("URL", url + "login.html")
-                    intent.putExtra("TITLE", "Device Setup")
-                    startActivity(intent)
+            R.id.device_setup -> {
+                mPwProtocol.getWebUrl { result ->
+                    val url = result.getString("URL")
+                    if (url != null) {
+                        val intent = Intent(baseContext, PwWebView::class.java)
+                        intent.putExtra("URL", url + "login.html")
+                        intent.putExtra("TITLE", "Device Setup")
+                        startActivity(intent)
+                    }
                 }
             }
-        } else if (id == R.id.video_archive) {
-            val intent = Intent(baseContext, ArchiveActivity::class.java)
-            startActivity(intent)
-            return true
+
+            R.id.video_archive -> {
+                val intent = Intent(baseContext, ArchiveActivity::class.java)
+                startActivity(intent)
+            }
+
+            else -> {
+                return super.onOptionsItemSelected(item)
+            }
         }
-        return super.onOptionsItemSelected(item)
+        return true
     }
 
     private fun savePref() {

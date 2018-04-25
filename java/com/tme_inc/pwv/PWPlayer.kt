@@ -44,11 +44,11 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
     fun start() {
 
-        try {
-            mDecoder =
-                    MediaCodec.createDecoderByType(mMediaFormat.getString(MediaFormat.KEY_MIME))
-        } catch (e: IOException) {
-            mDecoder = null
+        mDecoder = try {
+            MediaCodec.createDecoderByType(mMediaFormat.getString(MediaFormat.KEY_MIME))
+        }
+        catch (e: IOException) {
+            null
         }
 
         if (mDecoder != null) {
@@ -280,11 +280,12 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
     val isVideoOutputReady: Boolean
         get() {
             if (mAvailableOutputBuffer < 0) {
-                try {
-                    mAvailableOutputBuffer = mDecoder!!.dequeueOutputBuffer(mOutputBufferInfo, 0)
-                } catch (e: IllegalStateException) {
-                    mAvailableOutputBuffer = -1
-                }
+                mAvailableOutputBuffer =
+                    try {
+                        mDecoder!!.dequeueOutputBuffer(mOutputBufferInfo, 0)
+                    } catch (e: IllegalStateException) {
+                        -1
+                    }
             }
             return mAvailableOutputBuffer >= 0
         }
@@ -310,7 +311,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
     private fun audioRun_x() {
 
         // init audio track
-        val decode_table = if (mAudioCodec == 2) {
+        val decodeTable = if (mAudioCodec == 2) {
             alaw_table
         } else {
             ulaw_table
@@ -337,7 +338,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
             try {
                 audioFrame = mAudioBuffers.poll(50, TimeUnit.MILLISECONDS)
             } catch (e: InterruptedException) {
-                break ;
+                break 
             }
 
             if (audioFrame != null) {
@@ -352,7 +353,7 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
 
                 // decode audio
                 for( i in 0 .. alen) {
-                    audioBuffer[i] = decode_table[audioFrame.getInt(i)]
+                    audioBuffer[i] = decodeTable[audioFrame.getInt(i)]
                 }
                 audioTrack.write(audioBuffer, 0, alen - adj)
                 audioTimestamp = audioFrame.timestamp
@@ -392,8 +393,6 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
     @SuppressLint("WrongConstant")
     private fun audioRun() {
 
-        var aCodec: MediaCodec?
-
         mAudioBuffers.clear()
         audioTimestamp = 0L
 
@@ -403,12 +402,14 @@ class PWPlayer(activity: Activity, private val mSurf: Surface, private val m_liv
             "audio/g711-mlaw"
         }
 
-        try {
-            aCodec = MediaCodec.createDecoderByType(amime)
-        } catch (e: IOException) {
-            aCodec = null
-        } catch (e: IllegalArgumentException) {
-            aCodec = null
+        val aCodec = try {
+            MediaCodec.createDecoderByType(amime)
+        }
+        catch (e: IOException) {
+            null
+        }
+        catch (e: IllegalArgumentException) {
+            null
         }
 
         if (aCodec == null) {

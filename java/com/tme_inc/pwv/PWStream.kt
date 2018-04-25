@@ -23,10 +23,9 @@ open class PWStream(channel: Int) {
     protected var mAudioFrameQueue: Queue<MediaFrame> = ConcurrentLinkedQueue()
     protected var mTextFrameQueue: Queue<MediaFrame> = ConcurrentLinkedQueue()
 
-    var resolution = 0
-        protected set                   // channel resolution
+    var resolution = 0                           // channel resolution
     protected var mMaxQueue = 1000
-    protected var mStarted: Boolean = false
+    protected var mStarted = false
 
     protected var x_textframe: MediaFrame? = null
     protected var refFramePts: Long = 0          // reference frame PTS, -1 = not available
@@ -38,15 +37,11 @@ open class PWStream(channel: Int) {
     var audio_codec = 1
     var audio_samplerate = 8000
 
-    var totalChannels = 0               // total channel
-    var mChannel = 0                   // current channel
-    protected var mChannelNames: Array<String?> = Array<String?>(0, {""})
+    var devicetype = 0
+    var video_height = 0
+    var video_width = 0
 
-    var devicetype: Int = 0
-    var video_height: Int = 0
-    var video_width: Int = 0
-
-    var active_timeMillis: Long = 0
+    var active_timeMillis = SystemClock.uptimeMillis()
 
     val isActive: Boolean
         get() = SystemClock.uptimeMillis() - active_timeMillis < 30000
@@ -54,14 +49,16 @@ open class PWStream(channel: Int) {
     open val isRunning: Boolean
         get() = false
 
-    val channelName: String?
-        get() {
-            return if ( mChannel <0 || mChannel >= mChannelNames.size) {
-                "Camera " + (mChannel + 1)
-            } else {
+    var totalChannels = 1               // total channel
+    val mChannel = channel              // current channel
+
+    protected var mChannelNames = ArrayList<String>()
+    val channelName: String
+        get() =
+            if ( mChannel >= 0 && mChannel < mChannelNames.size)
                 mChannelNames[mChannel]
-            }
-        }
+            else
+                "Camera ${mChannel + 1}"
 
     val videoFrame: MediaFrame?
         get() = mVideoFrameQueue.poll()
@@ -72,23 +69,7 @@ open class PWStream(channel: Int) {
     val textFrame: MediaFrame?
         get() = mTextFrameQueue.poll()
 
-    init {
-        mChannel = channel
-        totalChannels = 1
-        resolution = 0
-        video_width = 0
-        video_height = 0
-        file_encrypted = false
-        mStarted = false
-        refFrameTS = 0
-        frameTS = 0
-        refFramePts = 0
-        active_timeMillis = SystemClock.uptimeMillis()
-    }
-
-    open fun start() {
-        active_timeMillis = SystemClock.uptimeMillis()
-    }
+    open fun start() {}
 
     open fun release() {
         clearQueue()

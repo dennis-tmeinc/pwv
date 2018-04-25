@@ -64,7 +64,8 @@ open class PwViewActivity : Activity() {
     // player support
     protected var mplayer: PWPlayer? = null
     protected var mstream: PWStream? = null
-    protected var mTimeAnimator: TimeAnimator? = null
+
+    protected val mTimeAnimator: TimeAnimator = TimeAnimator()
     protected var m_UIhandler: Handler? = null
 
     protected var savedScreenTimeout = 0
@@ -85,7 +86,8 @@ open class PwViewActivity : Activity() {
         set(ms) {
             try {
                 Settings.System.putInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT, ms)
-            } catch (e: SecurityException) {
+            }
+            catch (e: SecurityException) {
             }
         }
 
@@ -240,6 +242,7 @@ open class PwViewActivity : Activity() {
                     }
 
                 }
+                v.performClick()
                 return res
             }
         })
@@ -316,7 +319,7 @@ open class PwViewActivity : Activity() {
         }
     }
 
-    protected fun screen_KeepOn(on: Boolean) {
+    protected fun screenKeepOn(on: Boolean) {
         if (on) {
             if (!m_keepon) {
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -346,11 +349,11 @@ open class PwViewActivity : Activity() {
         )
 
         view.setShadowLayer(2f, 0f, 0f, Color.BLACK)
-        view.setVisibility(View.INVISIBLE)
+        view.visibility = View.INVISIBLE
         return view
     }
 
-    protected fun stopMedia() {
+    private fun stopMedia() {
         if (mstream != null) {
             mstream!!.release()
             mstream = null
@@ -393,7 +396,13 @@ open class PwViewActivity : Activity() {
     }
 
     protected open fun onAnimate(totalTime: Long, deltaTime: Long) {
-        if (m_connMode == DvrClient.CONN_USB && mstream != null && !mstream!!.isActive) {
+        if( mstream != null && !mstream!!.isActive) {
+            finish()
+        }
+    }
+
+    private val usbDisconnectReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
             finish()
         }
     }
@@ -412,27 +421,32 @@ open class PwViewActivity : Activity() {
 
         // force turn on screen keep on
         m_keepon = false
-        screen_KeepOn(true)
+        screenKeepOn(true)
+
+        if( m_connMode == DvrClient.CONN_USB ) {
+            registerReceiver(usbDisconnectReceiver, IntentFilter(Intent.ACTION_POWER_DISCONNECTED))
+        }
 
         showUI()
 
         // start animator
-        if (mTimeAnimator == null) {
-            mTimeAnimator = TimeAnimator()
-            mTimeAnimator!!.setTimeListener { timeAnimator, totalTime, deltaTime ->
-                onAnimate(
-                    totalTime,
-                    deltaTime
-                )
-            }
+        mTimeAnimator.setTimeListener { timeAnimator, totalTime, deltaTime ->
+            onAnimate(
+                totalTime,
+                deltaTime
+            )
         }
-        mTimeAnimator!!.start()
+        mTimeAnimator.start()
     }
 
     override fun onPause() {
         super.onPause()
 
-        mTimeAnimator!!.end()
+        if( m_connMode == DvrClient.CONN_USB ) {
+            unregisterReceiver(usbDisconnectReceiver)
+        }
+
+        mTimeAnimator.end()
         stopMedia()
         mPwProtocol.cancel()
 
@@ -464,29 +478,29 @@ open class PwViewActivity : Activity() {
             return
 
         val frame = txtFrame.array
-        var text_off = txtFrame.pos
-        val text_len = text_off + txtFrame.len
+        var textPos = txtFrame.pos
+        val textLen = textPos + txtFrame.len
 
         var idx = 0
-        while (text_off < text_len &&
-            frame[text_off] == 's'.toByte() &&
-            frame[text_off + 1] == 't'.toByte() )
+        while (textPos < textLen &&
+            frame[textPos] == 's'.toByte() &&
+            frame[textPos + 1] == 't'.toByte() )
         {
             while( idx >= m_osd.size ) {
                 m_osd.add( newOSDView() )
             }
 
-            val osdLen = frame[text_off + 6].toInt()
+            val osdLen = frame[textPos + 6].toInt()
             if (osdLen >= 4 ) {
-                if (m_osd[idx].getVisibility() != View.VISIBLE) {
-                    m_osd[idx].setVisibility(View.VISIBLE)
+                if (m_osd[idx].visibility != View.VISIBLE) {
+                    m_osd[idx].visibility = View.VISIBLE
 
-                    val align = frame[text_off + 8].toInt()
-                    val posx = frame[text_off + 9].toInt()
-                    val posy = frame[text_off + 10].toInt()
+                    val align = frame[textPos + 8].toInt()
+                    val posx = frame[textPos + 9].toInt()
+                    val posy = frame[textPos + 10].toInt()
 
                     val h = m_osd[idx].textSize / 24.0f
-                    val lp = m_osd[idx].getLayoutParams() as FrameLayout.LayoutParams
+                    val lp = m_osd[idx].layoutParams as FrameLayout.LayoutParams
                     lp.height = -2
                     lp.width = -2
                     lp.gravity = 0
@@ -494,11 +508,11 @@ open class PwViewActivity : Activity() {
                     if (align and 1 != 0) {       // ALIGN LEFT
                         lp.leftMargin = posx * 2
                         lp.rightMargin = 0
-                        lp.gravity = lp.gravity or Gravity.LEFT
+                        lp.gravity = lp.gravity or Gravity.START
                     } else if (align and 2 != 0) {       // ALIGN RIGHT
                         lp.leftMargin = 0
                         lp.rightMargin = posx * 2
-                        lp.gravity = lp.gravity or Gravity.RIGHT
+                        lp.gravity = lp.gravity or Gravity.END
                     }
                     if (align and 4 != 0) {       // ALIGN TOP
                         lp.topMargin = (posy * h).toInt()
@@ -513,17 +527,16 @@ open class PwViewActivity : Activity() {
                 }
 
                 try {
-                    m_osd[idx].setText(
-                        String(
+                    m_osd[idx].text = String(
                             frame,
-                            text_off + 12,
+                            textPos + 12,
                             osdLen - 4,
                             Charsets.ISO_8859_1     // Use ISO_8859 for degree symble
-                        ).trim())
+                        ).trim()
                 } catch (e: UnsupportedEncodingException) {
                 }
 
-                text_off += osdLen + 8
+                textPos += osdLen + 8
 
             } else {
                 break

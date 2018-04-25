@@ -65,7 +65,7 @@ class TagEvent : Activity() {
         // init PW event processor
         //
         mPwProtocol = PWProtocol()
-        mPwProtocol!!.GetVri {
+        mPwProtocol!!.getVri {
             onTagPWEvent(it)
         }
 
@@ -279,7 +279,7 @@ class TagEvent : Activity() {
 
             // set VRI
             if (mPwProtocol != null) {
-                mPwProtocol!!.SetVri(vri)
+                mPwProtocol!!.setVri(vri)
             }
 
         }

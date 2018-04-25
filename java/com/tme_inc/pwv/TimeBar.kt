@@ -256,7 +256,7 @@ class TimeBar @JvmOverloads constructor(
         mClipInfo.clear()
         mLockInfo.clear()
 
-        if (date.size > 0)
+        if (date.isNotEmpty())
         {
             val startTime = dateToMillis(date[0])
             val endTime = dateToMillis(date[date.size-1]) + 24*3600*1000 - 1
