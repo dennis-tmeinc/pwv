@@ -144,11 +144,11 @@ class TagEvent : Activity() {
 
                 // extension of vri
                 fun ByteArray.getVriItem(offset: Int, len: Int ) : String {
-                    return String(
+                    return CString(
                         this,
                         offset,
                         len
-                    ).split("\u0000")[0].trim()
+                    ).trim()
                 }
 
                 // Search matching vri

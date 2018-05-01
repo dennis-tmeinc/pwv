@@ -180,11 +180,11 @@ class TagEventActivity : Activity() {
 
                 // vri extension
                 fun ByteArray.getVriItem(offset: Int, len: Int ) : String {
-                    return String(
+                    return CString(
                         this,
                         offset,
                         len
-                    ).split("\u0000")[0].trim()
+                    ).trim()
                 }
 
                 var offset = 0

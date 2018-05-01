@@ -343,6 +343,21 @@ class Liveview : PwViewActivity() {
         }
     }
 
+    // lp button delayed up
+    private val lpUpdelayedCB = Runnable {
+        if ( button_lp.isSelected ) {
+            button_lp.isSelected = false
+            mPwProtocol.sendPWKey(PWProtocol.PW_VK_LP_UP)
+        }
+    }
+    private fun lpUpdelayed()
+    {
+        if( button_lp.isSelected) {
+            button_lp.removeCallbacks(lpUpdelayedCB)
+            button_lp.postDelayed(lpUpdelayedCB,5000)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_liveview)
@@ -378,31 +393,29 @@ class Liveview : PwViewActivity() {
         }
 
         button_cam1.setOnClickListener {
-            mPwProtocol.sendPWKey(PWProtocol.PW_VK_C1_DOWN, {})
+            mPwProtocol.sendPWKey(PWProtocol.PW_VK_C1_DOWN)
             (it as ImageButton).setImageResource(R.drawable.pw_cam1_trans)
             mStatusTime = 0
         }
 
         button_cam2.setOnClickListener {
-            mPwProtocol.sendPWKey(PWProtocol.PW_VK_C2_DOWN, {})
+            mPwProtocol.sendPWKey(PWProtocol.PW_VK_C2_DOWN)
             (it as ImageButton).setImageResource(R.drawable.pw_cam2_trans)
             mStatusTime = 0
         }
 
         button_tm.setOnClickListener {
-            mPwProtocol.sendPWKey(PWProtocol.PW_VK_TM_DOWN, {})
+            mPwProtocol.sendPWKey(PWProtocol.PW_VK_TM_DOWN)
             mStatusTime = 0
         }
 
         button_lp.setOnClickListener {
             val selected = (it as ImageButton).isSelected
             it.isSelected = !selected
-
             if (it.isSelected) {
-                mPwProtocol.sendPWKey(PWProtocol.PW_VK_LP_DOWN, {})
-                m_UIhandler?.sendEmptyMessageDelayed(MSG_PW_LPOFF, 5000)
+                mPwProtocol.sendPWKey(PWProtocol.PW_VK_LP_DOWN)
+                lpUpdelayed()
             } else {
-                m_UIhandler?.removeMessages(MSG_PW_LPOFF)
                 mPwProtocol.sendPWKey(PWProtocol.PW_VK_LP_UP)
             }
 
@@ -414,19 +427,6 @@ class Liveview : PwViewActivity() {
             startActivity(intent)
             finish()
         }
-
-        m_UIhandler = Handler({ msg:Message ->
-            if (msg.what == MSG_UI_HIDE) {
-                hideUI()
-            } else if (msg.what == MSG_PW_LPOFF) {
-                if ( button_lp.isSelected ) {
-                    button_lp.isSelected = false
-                    mPwProtocol.sendPWKey(PWProtocol.PW_VK_LP_UP)
-                }
-            }
-            true
-        })
-
     }
 
     override fun onResume() {

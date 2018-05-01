@@ -19,6 +19,7 @@ import android.view.View
 import android.widget.EdgeEffect
 import android.widget.OverScroller
 import android.widget.Toast
+import java.text.DateFormat
 
 import java.text.SimpleDateFormat
 import java.util.*
@@ -39,12 +40,12 @@ class TimeBar @JvmOverloads constructor(
     // Edge effect / overscroll tracking objects.
     private val mEdgeEffect = EdgeEffect(context)
 
-    private var mEdgeRight: Boolean = false        // Edge effect on right side
+    private var mEdgeRight = false        // Edge effect on right side
 
     // Viewport
-    private val mViewportWidthMin: Int = 300                    // 5 min
-    private val mViewportWidthMax: Int = 30 * 24 * 60 * 60      // 30 days
-    private var mViewportWidth: Int = 3600                      // View port width in seconds, 1 hour default
+    private val mViewportWidthMin = 300                    // 5 min
+    private val mViewportWidthMax = 30 * 24 * 60 * 60      // 30 days
+    private var mViewportWidth = 3600                      // View port width in seconds, 1 hour default
 
     // View size ;
     private var mWidth =  600                               // Width in pixels, 600 default, will be changed by onSizeChanged()
@@ -54,10 +55,10 @@ class TimeBar @JvmOverloads constructor(
     private var mPosMin: Long = 0
 
     // Position Range, in seconds
-    private var mPosRange: Int = 0
-    private var mPos: Int = 0                   // center time (related to mPosMin)
+    private var mPosRange = 0
+    private var mPos = 0                   // center time (related to mPosMin)
 
-    var isSeekPending: Boolean = false
+    var isSeekPending = false
         private set      // indicate a seek operating is pending
 
     private val mDensity = context.resources.displayMetrics.density
@@ -212,6 +213,7 @@ class TimeBar @JvmOverloads constructor(
     private var mScrollStartPos: Int = 0
 
     private var mToastPending: Boolean = false
+
     // Toast of current time indicated in time bar
     //private Calendar mToastTime = Calendar.getInstance();     // make it a member so only initialize once
     private val mRunToast = Runnable {
@@ -219,9 +221,7 @@ class TimeBar @JvmOverloads constructor(
         toastTime.timeInMillis = (mPosMin + mPos) * 1000
 
         //String format = "yyyy-MM-dd HH:mm:ss";
-        val format = "MM/dd/yyyy HH:mm:ss"
-        val sdf = SimpleDateFormat(format, Locale.US)
-        mPosToast.setText(sdf.format(toastTime.time))
+        mPosToast.setText(DateFormat.getDateTimeInstance().format(toastTime.time))
         mPosToast.show()
         mToastPending = false
         mTouchDelayTime = SystemClock.uptimeMillis() + 3000
@@ -252,7 +252,7 @@ class TimeBar @JvmOverloads constructor(
     // set date list
     // parameter:
     //    date[]: list of dates with available videos
-    fun setDateList(date:IntArray) {
+    fun setDateList(date:List<Int>) {
         mClipInfo.clear()
         mLockInfo.clear()
 
@@ -348,6 +348,8 @@ class TimeBar @JvmOverloads constructor(
     private fun XToPos(x: Int): Int {
         return ((x.toLong() - mWidth / 2) * mViewportWidth / mWidth + mPos).toInt()
     }
+
+    private var drawGridWidth = 0
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -529,11 +531,19 @@ class TimeBar @JvmOverloads constructor(
         val maxLabels = mWidth / labelWidth
 
         var gridWidth = (posEnd - posStart) / maxLabels
+        drawGridWidth = gridWidth
 
-        val gridwarray = intArrayOf(1, 2, 5, 10, 15, 30, 60)
+        var dateDrawFormat : DateFormat
 
-        var format = "HH:mm"
-        if (gridWidth < 60 * 60) {
+        if (gridWidth >= 20 * 60 * 60) {
+            gridWidth = (gridWidth / (24 * 60 * 60) + 1) * 24 * 60 * 60
+            // format = "MM/dd"
+            dateDrawFormat = SimpleDateFormat("MM/dd")
+        } else if (gridWidth >= 60 * 60) {
+            gridWidth = (gridWidth / (60 * 60) + 1) * 60 * 60
+            dateDrawFormat = SimpleDateFormat("HH:mm")
+        } else {
+            val gridwarray = intArrayOf(1, 2, 5, 10, 15, 30, 60)
             i = 0
             while (i < gridwarray.size) {
                 if (gridWidth < gridwarray[i] * 60) {
@@ -542,14 +552,11 @@ class TimeBar @JvmOverloads constructor(
                 }
                 i++
             }
-        } else if (gridWidth < 20 * 60 * 60) {       // less than a day
-            gridWidth = (gridWidth / (60 * 60) + 1) * 60 * 60
-        } else {              // more than a day
-            format = "MM/dd"
-            gridWidth = (gridWidth / (24 * 60 * 60) + 1) * 24 * 60 * 60
+            // format = "HH:mm"
+            dateDrawFormat = SimpleDateFormat("HH:mm")
         }
 
-        val sdf = SimpleDateFormat(format, Locale.US)
+        // val sdf = SimpleDateFormat(format)
         val descent = textPaint.descent()
         val textY = (mHeight / 2 + 10).toFloat()
         val markY = textY + descent
@@ -558,7 +565,7 @@ class TimeBar @JvmOverloads constructor(
         var pos = posStart - posStart % gridWidth
         while (pos < posEnd + gridWidth) {
             calendar.timeInMillis = (mPosMin + pos) * 1000L
-            val text = sdf.format(calendar.time)
+            val text = dateDrawFormat.format(calendar.time)
             val x = PosToX(pos)
             canvas.drawText(text, x.toFloat(), textY, textPaint)
             canvas.drawLine(x.toFloat(), markY, x.toFloat(), (mHeight - clipx).toFloat(), colorPaint)

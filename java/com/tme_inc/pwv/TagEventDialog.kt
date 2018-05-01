@@ -158,11 +158,11 @@ class TagEventDialog : DialogFragment() {
                             var vridatetime: Long = 0
 
                             //VRI
-                            val vri = String(
+                            val vri = CString(
                                 VriList,
                                 o,
                                 64
-                            ).split("\u0000")[0].trim()
+                            ).trim()
                             // Split vri date/time
                             val vriarray = vri.split("-")
                             if (vriarray.size > 1) {
@@ -207,11 +207,11 @@ class TagEventDialog : DialogFragment() {
                         offset = o
 
                         var OfficerId = ""
-                        var str = String(
+                        var str = CString(
                             VriList,
                             offset,
                             64
-                        ).split("\u0000")[0].trim()
+                        ).trim()
                         val eVri = mBaseView!!.findViewById<View>(R.id.tag_vri) as EditText
                         eVri?.setText(str)
                         // splite officer ID from vri
@@ -222,11 +222,11 @@ class TagEventDialog : DialogFragment() {
                         offset += 64
 
                         // incident classification
-                        str = String(
+                        str = CString(
                             VriList,
                             offset,
                             32
-                        ).split("\u0000")[0].trim()
+                        ).trim()
                         val sIncident = mBaseView!!.findViewById<View>(R.id.tag_incident) as Spinner
                         if (sIncident != null) {
                             val adapter = sIncident.adapter as ArrayAdapter<CharSequence>
@@ -240,21 +240,21 @@ class TagEventDialog : DialogFragment() {
                         offset += 32
 
                         // case number
-                        str = String(
+                        str = CString(
                             VriList,
                             offset,
                             64
-                        ).split("\u0000")[0].trim()
+                        ).trim()
                         val eCase = mBaseView!!.findViewById<View>(R.id.tag_casenumber) as EditText
                         eCase?.setText(str)
                         offset += 64
 
                         // Priority
-                        str = String(
+                        str = CString(
                             VriList,
                             offset,
                             20
-                        ).split("\u0000")[0].trim()
+                        ).trim()
                         val sPrio = mBaseView!!.findViewById<View>(R.id.tag_priority) as Spinner
                         if (sPrio != null) {
                             val adapter = sPrio.adapter as ArrayAdapter<CharSequence>
@@ -274,11 +274,11 @@ class TagEventDialog : DialogFragment() {
                         offset += 32    // skip officer ID
 
                         // Notes
-                        str = String(
+                        str = CString(
                             VriList,
                             offset,
                             255
-                        ).split("\u0000")[0].trim()
+                        ).trim()
                         val eNotes = mBaseView!!.findViewById<View>(R.id.tag_notes) as EditText
                         eNotes?.setText(str)
 
@@ -295,7 +295,7 @@ class TagEventDialog : DialogFragment() {
 
     override fun onDestroyView() {
         mBaseView = null
-        mPwProtocol!!.close()
+        mPwProtocol!!.cancel()
         super.onDestroyView()
     }
 

@@ -14,9 +14,9 @@ import java.util.*
 /**
  * Created by dennis on 28/04/15.
  */
-class VideoDatesDialog : DialogFragment() {
+class VideoDatesDialog () : DialogFragment() {
 
-    var dateList = intArrayOf()
+    var dateList : List<Int> = ArrayList()
     var uiHandler: Handler? = null
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {

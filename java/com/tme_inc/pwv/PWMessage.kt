@@ -4,10 +4,8 @@ package com.tme_inc.pwv
  * Created by dennis on 1/29/15.
  */
 
-// used by main activity
-internal const val MSG_UI_HIDE = 1
-
 // message used by PW Stream
+
 internal const val MSG_PW_QUIT = 101
 internal const val MSG_PW_CONNECT = 102
 internal const val MSG_PW_GETFRAME = 103

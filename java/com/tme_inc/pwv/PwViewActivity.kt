@@ -66,7 +66,6 @@ open class PwViewActivity : Activity() {
     protected var mstream: PWStream? = null
 
     protected val mTimeAnimator: TimeAnimator = TimeAnimator()
-    protected var m_UIhandler: Handler? = null
 
     protected var savedScreenTimeout = 0
 
@@ -249,6 +248,16 @@ open class PwViewActivity : Activity() {
 
     }
 
+    private val hideUiRunnable = Runnable {
+        hideUI()
+    }
+
+    private fun hideUiDelaed() {
+        layoutscreen.removeCallbacks(hideUiRunnable)
+        m_req_hideui = true
+        layoutscreen.postDelayed(hideUiRunnable,30000)
+    }
+
     protected open fun showUI() {
         // display action bar and menu
         if (isScreenLandscape) {
@@ -257,12 +266,7 @@ open class PwViewActivity : Activity() {
             pwcontrol.animate().alpha(1.0f)
             btPlayMode.animate().alpha(1.0f)
 
-            if (m_UIhandler != null) {
-                m_UIhandler!!.removeMessages(MSG_UI_HIDE) // remove pending hide ui
-                m_UIhandler!!.sendEmptyMessageDelayed(MSG_UI_HIDE, 30000)
-                m_req_hideui = true
-            }
-
+            hideUiDelaed()
         }
 
     }
@@ -296,9 +300,8 @@ open class PwViewActivity : Activity() {
                             View.GONE
                     }
                 })
-
-            m_req_hideui = false
         }
+        m_req_hideui = false
     }
 
     private fun toggleUI() {
@@ -312,10 +315,8 @@ open class PwViewActivity : Activity() {
 
     override fun onUserInteraction() {
         super.onUserInteraction()
-        if (m_req_hideui && m_UIhandler != null) {
-            m_UIhandler!!.removeMessages(MSG_UI_HIDE) // remove pending hide ui
-            m_UIhandler!!.sendEmptyMessageDelayed(MSG_UI_HIDE, 30000)
-            m_req_hideui = true
+        if (m_req_hideui ) {
+            hideUiDelaed()
         }
     }
 
@@ -347,21 +348,19 @@ open class PwViewActivity : Activity() {
             TypedValue.COMPLEX_UNIT_DIP,
             resources.configuration.screenWidthDp.toFloat() / 32.0f
         )
-
-        view.setShadowLayer(2f, 0f, 0f, Color.BLACK)
+        view.setTextColor(0xc0ffffff.toInt())
+        view.setShadowLayer(3f, 0f, 0f, Color.BLACK)
         view.visibility = View.INVISIBLE
         return view
     }
 
     private fun stopMedia() {
-        if (mstream != null) {
-            mstream!!.release()
-            mstream = null
-        }
-        if (mplayer != null) {
-            mplayer!!.release()
-            mplayer = null
-        }
+        mstream?.release()
+        mstream = null
+
+        mplayer?.release()
+        mplayer = null
+
         layoutscreen.scrollTo(0, 0)
 
         // clear OSD ;
@@ -531,7 +530,7 @@ open class PwViewActivity : Activity() {
                             frame,
                             textPos + 12,
                             osdLen - 4,
-                            Charsets.ISO_8859_1     // Use ISO_8859 for degree symble
+                             Charsets.ISO_8859_1     // Use ISO_8859 for degree symble
                         ).trim()
                 } catch (e: UnsupportedEncodingException) {
                 }

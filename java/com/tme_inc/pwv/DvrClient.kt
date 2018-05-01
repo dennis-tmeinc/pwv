@@ -13,36 +13,39 @@ import java.nio.ByteOrder
 
 open class DvrClient : PwvSocket() {
 
-    private var mHost: String = "192.168.1.100"
-    protected var mPort: Int = 0
+    var host: String = "192.168.1.100"
+    var port: Int = 15114
 
     // remote login connections
-    protected var loginServer: String = "localhost"
-    protected var loginPort: Int = 0
+    var loginServer: String = "localhost"
+    var loginPort: Int = 0
+    var mId: String = "android"          // my device id
 
     private var loginSessionId: String = "0"
     private var loginTargetId: String = "0"
-    protected var mId: String = "android"          // my device id
 
     // cmd: vserver <sessionid> <deviceid> <port>
     val httpUrl: String
         get() {
             var r = ""
             if (connectMode == CONN_DIRECT) {
-                return "http://$mHost/"
-            } else if (loginServer != null) {
-                connect(loginServer, loginPort)
-                if (isConnected) {
-                    sendLine("vserver $loginSessionId $loginTargetId 80\n")
-                    val fields = recvLine().split(Regex("\\s+")).dropLastWhile { it.isBlank() }
-                    if (fields.size >= 3 && fields[0] == "ok") {
-                        r = if (fields[1] == "*")
+                return "http://$host/"
+            }
+            else {
+                with( PwvSocket() ) {
+                    connect(loginServer, loginPort)
+                    if (isConnected) {
+                        sendLine("vserver $loginSessionId $loginTargetId 80\n")
+                        val fields = recvLine().split(Regex("\\s+")).dropLastWhile { it.isBlank() }
+                        if (fields.size >= 3 && fields[0] == "ok") {
+                            r = if (fields[1] == "*")
                                 "http://$loginServer:${fields[2]}/"
                             else
                                 "http://${fields[1]}:${fields[2]}/"
+                        }
                     }
+                    close()
                 }
-                close()
             }
             return r
         }
@@ -53,11 +56,11 @@ open class DvrClient : PwvSocket() {
 
             val prefs = appCtx!!.getSharedPreferences("pwv", 0)
 
-            mHost = prefs.getString("deviceIp", "192.168.1.100")
-            mPort = prefs.getInt("dvrPort", 15114)
+            host = prefs.getString("deviceIp", "192.168.1.100")
+            port = prefs.getInt("dvrPort", 15114)
 
             loginServer = if (connectMode == CONN_USB) {
-                "127.0.0.1"          // local service
+                "localhost"                                 // local service
             } else {      // default for direct connection (local lan)
                 prefs.getString("loginServer", "pwrev.us.to")
             }
@@ -93,15 +96,13 @@ open class DvrClient : PwvSocket() {
             return true
         }
 
-        close()
-
         if (connectMode == CONN_DIRECT) {
-            return connect(mHost, mPort)
+            return connect(host, port)
         } else {
             connect(loginServer, loginPort)
             if (isConnected) {
                 // use login remote connection (internet)
-                sendLine("remote $loginSessionId $loginTargetId $mPort\n" )
+                sendLine("remote $loginSessionId $loginTargetId $port\n" )
             } else {
                 close()
             }
@@ -133,14 +134,14 @@ open class DvrClient : PwvSocket() {
 
     fun recvAns(): Ans {
         val bb = ByteBuffer.allocate(12)
-        if (recv(bb) >= 12) {
+        if (recvBuf(bb) >= 12) {
             bb.order(ByteOrder.LITTLE_ENDIAN)
             val ans = Ans(bb.int, bb.int)
             val anssize = bb.int
             if (ans.code > 0 && anssize > 0 && anssize < 10000000) {
                 //ans.databuf = recv(ans.size)
                 ans.dataBuffer = ByteBuffer.allocate(anssize)
-                if (recv(ans.dataBuffer) >= anssize) {
+                if (recvBuf(ans.dataBuffer) >= anssize) {
                     return ans
                 }
             }

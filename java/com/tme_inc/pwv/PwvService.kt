@@ -8,24 +8,26 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
-import java.util.*
+import java.nio.channels.ServerSocketChannel
+import java.nio.channels.SocketChannel
+import kotlin.collections.ArrayList
 
 /**
  * Created by dennis on 09/06/15.
  */
 class PwvService : Service() {
 
-    private val vServerSet = HashSet<VirtualServer>()
-    private val connSet = HashSet<AdbConn>()
+    private val vServerSet = ArrayList<VirtualServer>()
+    private val connSet = ArrayList<AdbConn>()
 
-    // virtual server support
+      // virtual server support
     private inner class VirtualServer(val targetDid: String, val targetPort: String) {
 
-        var running: Boolean = false
+        var vsRun: Boolean = false
         private var server: ServerSocket? = null
 
-        private var mThread = Thread({
-            while (running && server != null && !server!!.isClosed) {
+        private var mThread = Thread {
+            while (vsRun && server != null && !server!!.isClosed) {
                 try {
                     val s = server!!.accept()
                     val nconn = AdbConn(s)
@@ -46,56 +48,57 @@ class PwvService : Service() {
                         nconn.close()
                     }
                 } catch (e: IOException) {
-                    running = false
+                    vsRun = false
                 }
             }
-            running = false
             try {
-                if (server != null)
-                    server!!.close()
+                synchronized(this) {
+                    server?.close()
+                }
             } catch (e: IOException) {
             }
-        })
+            finally {
+                vsRun = false
+            }
+        }
 
         init {
             try {
                 server = ServerSocket(0)
-                server!!.soTimeout = 1800000           // time out in half an hour
-                running = true
+                server!!.soTimeout = 30 * 60 * 1000           // time out in half an hour
+                vsRun = true
+                mThread.start()
             } catch (e: IOException) {
                 server = null
-                running = false
+                vsRun = false
             }
-            mThread.start()
         }
 
         val port: Int
-            get() =
-                if (running && server != null && !server!!.isClosed)
-                    server!!.localPort
-                else
-                    0
+            get() = server?.localPort?:0
 
         fun close() {
-            running = false
-            if (server != null) {
+            vsRun = false
+            synchronized(this) {
                 try {
-                    server!!.close()
+                    server?.close()
                 } catch (e: IOException) {
                     e.printStackTrace()
                 }
-
-                server = null
+                finally {
+                    server = null
+                }
             }
             mThread.interrupt()
         }
-
     }
 
     // adb reverse connection
     private inner class AdbConn(s: Socket) {
 
-        var phase = 1      // 0: close, 1: init cmd, 2: unit wait, 3: connecting, 4: connected
+        constructor(sc:SocketChannel):this(sc.socket())
+
+        var phase = 1      // 0: close, 1: init cmd, 2: unit wait ( or in multi-conn mode ), 3: connecting, 4: connected
         var did = s.remoteSocketAddress.toString()
         var unitname: String = ""
 
@@ -103,36 +106,37 @@ class PwvService : Service() {
         private var xoffflag = false
         private var sock = PwvSocket(s)
 
-        private val mThread = Thread({
+        private val mThread = Thread{
             while (phase > 0 && sock.isConnected) {
                 if (phase <= 2) {
-                    do_cmd()
+                    processCmd()
                 } else if (phase == 3) {        // connecting, wait to be connected or closed
                     try {
                         Thread.sleep(10000)     // 10 seconds wait to be connected
                     } catch (e: InterruptedException) {
+                        Thread.interrupted()        // clear interrupted flag
                     }
-
-                    if (phase == 3) {          // not connected in 10s
-                        break
+                    finally {
+                        if (phase == 3) {          // not connected in 10s
+                            break
+                        }
                     }
                 } else if (phase == 4) {        // connected
                     if (xoffflag) {
                         try {
                             Thread.sleep(100)
                         } catch (e: InterruptedException) {
+                            Thread.interrupted()        // clear interrupted flag
                         }
-
                     } else {
-                        do_tunneling()
+                        tunneling()
                     }
                 } else {
-                    break
+                    phase = 0
                 }
             }
-            close()
             phase = 0
-        })
+        }
 
         fun start() {
             mThread.start()
@@ -142,9 +146,7 @@ class PwvService : Service() {
             // clean up peers
             if (phase == 2) {
                 synchronized(connSet) {
-                    val it = connSet.iterator()
-                    while (it.hasNext()) {
-                        val conn = it.next()
+                    for( conn in connSet) {
                         if (conn.phase != 2) {
                             conn.closepeer(this)
                         }
@@ -160,8 +162,10 @@ class PwvService : Service() {
             }
 
             phase = 0
+
             // interrupt the thread if possible
-            mThread.interrupt()
+            if(mThread.isAlive)
+                mThread.interrupt()
         }
 
         fun closepeer(peer: AdbConn) {
@@ -173,7 +177,6 @@ class PwvService : Service() {
             }
         }
 
-        @Synchronized
         fun sendfrom(data: ByteArray, dsize: Int, from: AdbConn): Int {
             if (phase == 4 && target === from)
                 return sock.send(data, 0, dsize)
@@ -184,7 +187,6 @@ class PwvService : Service() {
             return 0
         }
 
-        @Synchronized
         fun sendLine(line: String): Int {
             return sock.sendLine(line)
         }
@@ -200,9 +202,9 @@ class PwvService : Service() {
             }
         }
 
-        protected fun do_cmd() {
+        private fun processCmd() {
             val fields = sock.recvLine().split("\\s+".toRegex()).dropLastWhile { it.isBlank() }
-            if (fields.size > 0) {
+            if (fields.isNotEmpty()) {
 
                 // support command list:
                 //    list:        list	sessionid	*|hostname  ( request a list of PW unit )
@@ -217,9 +219,7 @@ class PwvService : Service() {
                     "list" -> {
                         sendLine("rlist\n")
                         synchronized(connSet) {
-                            val it = connSet.iterator()
-                            while (it.hasNext()) {
-                                val conn = it.next()
+                            for( conn in connSet ) {
                                 if (conn.phase == 2) {
                                     sendLine("${conn.did} ${conn.unitname}\n")
                                 }
@@ -246,9 +246,7 @@ class PwvService : Service() {
                         // cmd:  remote sessionid did port
                         if (fields.size >= 4) {
                             synchronized(connSet) {
-                                val it = connSet.iterator()
-                                while (it.hasNext()) {
-                                    val conn = it.next()
+                                for( conn in connSet ) {
                                     if (conn.phase == 2 && conn.did == fields[2]) {
                                         // request reversed connection
                                         conn.sendLine("connect $did * ${fields[3]} * 0\n")
@@ -266,9 +264,7 @@ class PwvService : Service() {
                         // cmd:  remote sessionid did port
                         if (fields.size >= 4) {
                             synchronized(connSet) {
-                                val it = connSet.iterator()
-                                while (it.hasNext()) {
-                                    val conn = it.next()
+                                for( conn in connSet){
                                     if (conn.phase == 2 && fields[2] == conn.did) {
                                         // request reversed connection
                                         conn.sendLine("mconn $did * ${fields[3]} * 0\n")
@@ -279,20 +275,14 @@ class PwvService : Service() {
                             }
                         }
                         sendLine("Error\n")
-
                     }
 
                     "unit" -> {
                         if (fields.size >= 3) {
                             synchronized(connSet) {
-                                val it = connSet.iterator()
-                                while (it.hasNext()) {
-                                    val conn = it.next()
-                                    if (conn === this)
-                                        continue
-                                    if (conn.phase == 2) {
-                                        conn.close()
-                                        it.remove()
+                                for(conn in connSet){
+                                    if (conn != this && conn.phase == 2) {
+                                        conn.phase = 0
                                     }
                                 }
                             }
@@ -303,29 +293,34 @@ class PwvService : Service() {
                     }
 
                     "vserver" -> {
+                        var rsp = "Error\n"
+
                         // cmd: vserver <sessionid> <deviceid> <port>
                         if (fields.size >= 4) {
-                            var line: String = ""
+                            var vsexist = false
                             synchronized(vServerSet) {
-                                var vs: VirtualServer? = null
                                 // look for existing vserver
                                 for (v in vServerSet) {
                                     if (fields[2] == v.targetDid && fields[3] == v.targetPort) {
-                                        vs = v
+                                        rsp = "ok * ${v.port}\n"
+                                        vsexist = true
                                         break
                                     }
                                 }
-                                if (vs == null) {
-                                    vs = VirtualServer(fields[2], fields[3])
-                                    vServerSet.add(vs)
-                                }
-                                line = String.format("ok * %d\n", vs.port)
                             }
-                            if (!line.isEmpty())
-                                sendLine(line)
-                        } else {
-                            sendLine("Error\n")
+
+                            if (!vsexist) {
+                                val v = VirtualServer(fields[2], fields[3])
+                                if( v.vsRun ) {
+                                    synchronized(vServerSet) {
+                                        vServerSet.add(v)
+                                        rsp = "ok * ${v.port}\n"
+                                    }
+                                }
+                            }
                         }
+
+                        sendLine(rsp)
 
                     }
 
@@ -335,9 +330,7 @@ class PwvService : Service() {
                             // cmd: connected id
                             // find target
                             synchronized(connSet) {
-                                val it = connSet.iterator()
-                                while (it.hasNext()) {
-                                    val conn = it.next()
+                                for( conn in connSet ) {
                                     if (conn.phase == 3 && fields[1] == conn.did) {  // connecting
                                         if (phase != 2) {
                                             target = conn
@@ -361,9 +354,7 @@ class PwvService : Service() {
                     "close" -> {
                         if (fields.size > 1) {
                             synchronized(connSet) {
-                                val it = connSet.iterator()
-                                while (it.hasNext()) {
-                                    val conn = it.next()
+                                for( conn in connSet ) {
                                     if (fields[1] == conn.did) {  // connecting
                                         conn.target = null
                                         if (conn.phase == 3) {
@@ -385,23 +376,17 @@ class PwvService : Service() {
                         // multi use connection data
                         if (phase == 2 && fields.size > 2) {
                             val si = Integer.parseInt(fields[2])
-                            if (si > 0 && si < 65536) {
+                            if (si > 0) {
                                 val buffer = ByteArray(si)
-                                val r = sock.recv(buffer, 0, si)
+                                val r = sock.recvAll(buffer, 0, si)
                                 if (r > 0) {
-                                    var f: AdbConn? = null
                                     synchronized(connSet) {
-                                        val it = connSet.iterator()
-                                        while (it.hasNext()) {
-                                            val conn = it.next()
+                                        for( conn in connSet ) {
                                             if (conn.did == fields[1] && conn.target === this) {
-                                                f = conn
+                                                conn.sendfrom(buffer, r, this)
                                                 break
                                             }
                                         }
-                                    }
-                                    if (f != null) {
-                                        f!!.sendfrom(buffer, r, this)
                                     }
                                 }
                             }
@@ -411,12 +396,9 @@ class PwvService : Service() {
                     "xon" -> {
                         if (fields.size > 1) {
                             synchronized(connSet) {
-                                val it = connSet.iterator()
-                                while (it.hasNext()) {
-                                    val conn = it.next()
+                                for (conn in connSet) {
                                     if (fields[1] == conn.did && conn.target === this) {
                                         conn.xon()
-                                        break
                                     }
                                 }
                             }
@@ -428,7 +410,7 @@ class PwvService : Service() {
                         if (fields.size > 1) {
                             synchronized(connSet) {
                                 for (conn in connSet) {
-                                    if (conn.did == fields[1] && conn.target === this) {
+                                    if (fields[1] == conn.did && conn.target === this) {
                                         conn.xoff()
                                     }
                                 }
@@ -491,133 +473,91 @@ class PwvService : Service() {
         }
 
         // tunnelling data
-        private fun do_tunneling() {
+        private fun tunneling() {
             if (sock.isConnected && target != null) {
                 val buffer = ByteArray(8192)
-                val r = sock.recv1(buffer, 0, buffer.size)
+                val r = sock.recv(buffer)
                 if (r > 0) {
-                    if (target != null) {
-                        if (target!!.sendfrom(buffer, r, this) > 0)
-                            return         // success
-                    }
+                    if (target!!.sendfrom(buffer, r, this) > 0)
+                        return         // success
                 }
             }
             // tunnel closed or target closed
-            close()
+            phase=0
         }
     }
 
     // clean up closed sockets
-    protected fun cleanupSockets() {
+    private fun cleanupSockets() {
 
         synchronized(connSet) {
-            val it = connSet.iterator()
-            while (it.hasNext()) {
-                val conn = it.next()
-                if (conn.phase <= 0) {       // clean finished connection
-                    conn.close()
-                    it.remove()
+            for( i in connSet.lastIndex downTo 0) {
+                // clean finished connection
+                if( connSet[i].phase <= 0 ) {
+                    connSet[i].close()
+                    connSet.removeAt(i)
                 }
             }
         }
 
         synchronized(vServerSet) {
-            val it = vServerSet.iterator()
-            while (it.hasNext()) {
-                val vs = it.next()
-                if (!vs.running) {
-                    vs.close()
-                    it.remove()
+            for( i in vServerSet.lastIndex downTo 0) {
+                // clean finished connection
+                if( !vServerSet[i].vsRun ) {
+                    vServerSet[i].close()
+                    vServerSet.removeAt(i)
                 }
             }
         }
     }
 
-    // main server for PwvService
-    private inner class PwvServer {
-        private val server: ServerSocket?
+    private lateinit var pwvServer : ServerSocket
 
-        init {
-            val sPort = getSharedPreferences("pwv", 0).getInt("loginPort", 15600)
-            server =
-                    try {
-                        ServerSocket(sPort)
-                    } catch (e: IOException) {
-                        null
-                    }
-            server?.soTimeout = 1800000
-        }
-
-        protected var mThread = Thread({
-            while (server != null && !server.isClosed) {
-                try {
-                    val s = server.accept()
-                    if (s != null) {
-                        val conn = AdbConn(s)
-                        synchronized(connSet) {
-                            connSet.add(conn)
-                        }
-                        conn.start()
-                    }
-                    cleanupSockets()
-                } catch (e: IOException) {
-                    cleanupSockets()
-                    if (connSet.isEmpty()) {
-                        break
-                    }
-                }
-
-            }
+    private val pwvThread = Thread {
+        while(!pwvServer.isClosed) {
             try {
-                if (server != null && !server.isClosed)
-                    server.close()
+                val s = pwvServer.accept()
+                if (s != null) {
+                    val conn = AdbConn(s)
+                    synchronized(connSet) {
+                        connSet.add(conn)
+                    }
+                    conn.start()
+                }
             } catch (e: IOException) {
             }
-
-            stopSelf()
-        })
-
-        fun start() {
-            if (!mThread.isAlive)
-                mThread.start()
+            finally {
+                cleanupSockets()
+            }
         }
 
-        fun close() {
-            try {
-                server?.close()
-            } catch (e: IOException) {
-            }
+        try {
+            pwvServer.close()
+        } catch (e: IOException) {
+        }
 
-            if (mThread.isAlive) {
-                mThread.interrupt()
-            }
+        synchronized(connSet) {
+            connSet.forEach { it.close() }
+            connSet.clear()
+        }
 
-            synchronized(connSet) {
-                for (vs in connSet) {
-                    vs.close()
-                }
-                connSet.clear()
-            }
-
-            synchronized(vServerSet) {
-                for (vs in vServerSet) {
-                    vs.close()
-                }
-                vServerSet.clear()
-            }
-
+        synchronized(vServerSet) {
+            vServerSet.forEach { it.close() }
+            vServerSet.clear()
         }
     }
-
-    private var mServer: PwvServer? = null
 
     override fun onCreate() {
         super.onCreate()
-        mServer = PwvServer()
+
+        val sPort = getSharedPreferences("pwv", 0).getInt("loginPort", 15600)
+        pwvServer = ServerSocket(sPort)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        mServer?.start()
+        if( pwvThread.state == Thread.State.NEW )
+            pwvThread.start()
+
         return Service.START_STICKY
     }
 
@@ -627,6 +567,8 @@ class PwvService : Service() {
     }
 
     override fun onDestroy() {
-        mServer?.close()
+        pwvServer.close()
+        if( pwvThread.isAlive )
+            pwvThread.interrupt()
     }
 }

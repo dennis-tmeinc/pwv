@@ -81,7 +81,7 @@ class VriDialog : DialogFragment() {
 
     override fun onDestroyView() {
         mBaseView = null
-        mPwProtocol!!.close()
+        mPwProtocol!!.cancel()
         super.onDestroyView()
     }
 

@@ -12,6 +12,7 @@ import java.nio.ByteOrder
 import java.util.*
 import java.util.Arrays.copyOfRange
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.collections.ArrayList
 import kotlin.experimental.and
 
 /**
@@ -23,9 +24,11 @@ open class PWStream(channel: Int) {
     protected var mAudioFrameQueue: Queue<MediaFrame> = ConcurrentLinkedQueue()
     protected var mTextFrameQueue: Queue<MediaFrame> = ConcurrentLinkedQueue()
 
+    protected var hashId: String = "c?0"
+
     var resolution = 0                           // channel resolution
     protected var mMaxQueue = 1000
-    protected var mStarted = false
+    private var mStarted = false
 
     protected var x_textframe: MediaFrame? = null
     protected var refFramePts: Long = 0          // reference frame PTS, -1 = not available
@@ -33,6 +36,8 @@ open class PWStream(channel: Int) {
     protected var frameTS: Long = 0               // last frame TimeStamp
 
     private var file_encrypted: Boolean = false
+
+    var dayList = ArrayList<Int>()
 
     var audio_codec = 1
     var audio_samplerate = 8000
@@ -46,8 +51,7 @@ open class PWStream(channel: Int) {
     val isActive: Boolean
         get() = SystemClock.uptimeMillis() - active_timeMillis < 30000
 
-    open val isRunning: Boolean
-        get() = false
+    var isRunning: Boolean = false
 
     var totalChannels = 1               // total channel
     val mChannel = channel              // current channel
@@ -73,6 +77,7 @@ open class PWStream(channel: Int) {
 
     open fun release() {
         clearQueue()
+        dayList.clear()
     }
 
     protected fun checkTvsKey(connection: DvrClient): Boolean {
@@ -174,13 +179,12 @@ open class PWStream(channel: Int) {
     }
 
     protected fun onReceiveFrame(frame: ByteBuffer) {
-        active_timeMillis = SystemClock.uptimeMillis()
 
         while (frame.remaining() >= 40) {
             val pos = frame.position()
             val startcode = frame.getInt(pos)
-            val startcodeMasked = startcode and -0x100
-            var framelen: Int
+            val startcodeMasked = startcode and 0xffffff00.toInt()
+            val framelen: Int
 
             // check packet types
             if (startcode == 0x000001c0) {
@@ -210,12 +214,12 @@ open class PWStream(channel: Int) {
                 framelen = onHeader(frame)
             } else {
                 Log.d(logTag, "Unrecognized package")
-                break
+                framelen = 0
             }
             if (framelen > 0 && framelen <= frame.remaining()) {
                 frame.position(pos + framelen)
             } else {
-                break
+                return      // error
             }
         }
     }
@@ -372,6 +376,10 @@ open class PWStream(channel: Int) {
 
         var flags = 0
         if (frame.get(pos + pesHeaderLen + 4) and 0x0f != 1.toByte()) {
+
+            // set active time when key frame comes
+            active_timeMillis = SystemClock.uptimeMillis()
+
             flags = MediaCodec.BUFFER_FLAG_KEY_FRAME
             if (mVideoFrameQueue.size > mMaxQueue) {
                 clearQueue()

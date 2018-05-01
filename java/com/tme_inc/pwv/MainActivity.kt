@@ -344,7 +344,7 @@ class MainActivity : Activity() {
             accessKey = "EMPTY"
         }
 
-        m_pwProtocol.connectMode = m_connectMode
+        // m_pwProtocol.connectMode = m_connectMode
 
         m_pwProtocol.remoteLogin(
             { result ->
@@ -371,7 +371,10 @@ class MainActivity : Activity() {
                 updateNameList()
                 devicelist.postDelayed({ updateDeviceList() }, 15000)
             },
-            user, pass, accessKey
+            user,
+            pass,
+            accessKey,
+            m_connectMode.toString()
         )
     }
 

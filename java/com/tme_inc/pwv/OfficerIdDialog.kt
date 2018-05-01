@@ -31,11 +31,10 @@ class OfficerIdDialog : DialogFragment() {
                         val niditemlen = nidlen / nid
                         val ids = ArrayList<String>()
                         for (i in 0 until nid) {
-                            ids.add( String(
+                            ids.add( CString(
                                 idlist!!,
                                 i * niditemlen,
-                                niditemlen)
-                                .split("\u0000")[0].trim())
+                                niditemlen).trim())
                         }
                         baseView.e_officerid.setAdapter(ArrayAdapter<String>(
                             activity,
@@ -76,6 +75,6 @@ class OfficerIdDialog : DialogFragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        mPwProtocol.close()
+        mPwProtocol.cancel()
     }
 }
